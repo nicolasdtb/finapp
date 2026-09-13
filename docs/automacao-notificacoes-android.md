@@ -1,57 +1,61 @@
-﻿# Configuracao de Captura Automatica de Notificacoes Bancarias (Android)
+﻿# Guia de Captura Automática de Notificações Bancárias (Android)
 
-Este guia ensina como integrar o **MacroDroid** (gratuito na Google Play Store) para ler notificações de compras do seu banco e enviar automaticamente para a sua VM Linux via ZeroTier.
-
----
-
-## 1. Requisitos
-- Celular Android com o **ZeroTier One** conectado na sua rede (IP da VM acessível).
-- Aplicativo gratuito **MacroDroid** instalado pela Play Store.
+Este guia apresenta as **melhores alternativas 100% gratuitas e de código aberto** para substituir o MacroDroid e capturar notificações bancárias no Android sem pagar nada.
 
 ---
 
-## 2. Criando a Macro no MacroDroid
+## Opção 1: Automate (LlamaLab) — Recomendado (Gratuito na Play Store)
+O **Automate** é muito superior ao MacroDroid, moderno, gratuito e usa blocos visuais de fluxo (flowcharts). A versão gratuita permite até 30 blocos por fluxo (a nossa automação precisa de apenas 3 blocos!).
 
-### Passo A: Gatilho (Trigger)
-1. Abra o MacroDroid e clique em **Adicionar Macro**.
-2. Clique no **+** vermelho em Gatilhos.
-3. Escolha **Notificação** -> **Notificação Recebida**.
-4. Selecione **Selecionar Aplicativo(s)**.
-5. Marque seus aplicativos de bancos (ex: *Nubank*, *Banco Inter*, *Itaú*, *Bradesco*, etc.).
-6. Deixe o conteúdo do texto como: *Qualquer um* e dê OK.
-
----
-
-### Passo B: Ação (Action)
-1. Clique no **+** azul em Ações.
-2. Escolha **Conectividade** -> **Abrir Site / Obter HTTP**.
-3. Configure como **HTTP POST**:
-   - **URL:** `http://172.23.17.157:3001/api/v1/webhooks/bank-notification`
-   - **Content-Type:** `application/json`
-   - **Corpo da Requisição (Body):**
-     ```json
-     {
-       "app_name": "[not_app_name]",
-       "title": "[not_title]",
-       "text": "[not_body]"
-     }
-     ```
-     *(Você pode clicar no botão de reticências/tag ao lado do campo de texto para selecionar as variáveis de notificação do MacroDroid).*
-4. Dê OK.
-
----
-
-### Passo C: Salvar
-Dê o nome da Macro como `FinApp - Gastos Bancários` e salve.
+### Passo a Passo no Automate:
+1. Instale o **Automate** na Play Store (ícone de labirinto/engrenagens azuis).
+2. Abra o app, clique no botão **+** para criar um novo fluxo.
+3. No painel de blocos:
+   - Adicione o bloco **Apps** -> **Notification posted?** (Gatilho quando chega notificação).
+     - Toque nele e selecione os apps dos seus bancos (*Nubank*, *Inter*, etc.).
+     - No campo **Title**, declare uma nova variável: `not_title`.
+     - No campo **Message / Text**, declare uma nova variável: `not_text`.
+     - No campo **Package name**, declare: `not_app`.
+   - Conecte a saída "YES" no próximo bloco:
+   - Adicione o bloco **Connectivity** -> **HTTP request**:
+     - **Request URL:** `https://finapp.zt/api/v1/webhooks/bank-notification` (ou `https://172.23.17.157/api/v1/webhooks/bank-notification`)
+     - **Request method:** `POST`
+     - **Request content type:** `JSON`
+     - **Request content:**
+       ```json
+       {
+         "app_name": not_app,
+         "title": not_title,
+         "text": not_text
+       }
+       ```
+   - Conecte a saída do HTTP de volta na entrada do bloco de notificação (criando um loop contínuo de escuta).
+4. Salve e clique em **Start**.
 
 ---
 
-## 3. Como testar manualmente via curl (do terminal ou celular):
-Para simular que uma compra aconteceu no cartão sem precisar gastar dinheiro:
+## Opção 2: Termux + Termux:API (100% Open Source / Sem Limites)
+Para quem prefere uma solução **100% livre, sem anúncios e de código aberto** disponível no F-Droid:
+
+1. Instale o **Termux** e o **Termux:API** pelo F-Droid.
+2. No Termux, execute um script leve em bash ou python que escuta notificações do sistema via `termux-notification-list` e envia o payload para o FinApp via curl.
+
+---
+
+## Opção 3: Tasker (Se já tiver licença paga)
+Se você já tiver o Tasker:
+- **Event:** `UI -> Notification` (Owner Application: Nubank, Inter, etc.).
+- **Action:** `Net -> HTTP Request` (Method: POST, URL: `https://finapp.zt/api/v1/webhooks/bank-notification`, Body: `{"app_name": "%evtpkg", "title": "%evttitle", "text": "%evttext"}`).
+
+---
+
+## Testando o Webhook Manualmente:
+Você pode testar a qualquer momento pelo terminal da sua VM ou pelo PC com o comando:
+
 ```bash
-curl -X POST http://172.23.17.157:3001/api/v1/webhooks/bank-notification \
+curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
   -H "Content-Type: application/json" \
-  -d '{"app_name": "Nubank", "title": "Compra Aprovada", "text": "Compra de R$ 38,50 aprovada no Restaurante Sabor Brasil"}'
+  -d '{"app_name": "Nubank", "title": "Compra aprovada", "text": "Compra de R$ 42,90 aprovada em Supermercado Bom Preço"}'
 ```
-Ao abrir o **FinApp** no navegador, você verá imediatamente o banner amarelo:
-`"1 gasto bancário detectado - Supermercado/Restaurante - Toque para categorizar e aprovar"`.
+
+Ao abrir o FinApp, o card amarelo de alerta aparecerá instantaneamente com a compra detectada pronta para aprovação!
