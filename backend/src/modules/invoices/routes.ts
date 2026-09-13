@@ -41,6 +41,7 @@ export async function invoiceRoutes(app: FastifyInstance) {
     }
 
     const { url } = parsed.data;
+    app.log.info({ invoiceUrl: url }, "Iniciando consulta de Nota Fiscal SEFAZ");
 
     try {
       const response = await fetch(url, {
@@ -161,6 +162,8 @@ export async function invoiceRoutes(app: FastifyInstance) {
         date: invoiceDate,
         items
       };
+
+      app.log.info({ parsedInvoice: result }, "Nota Fiscal processada com sucesso");
 
       return reply.send({
         success: true,
