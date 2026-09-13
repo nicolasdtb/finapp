@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
 import { Settings } from "./pages/Settings.js";
+import { Reports } from "./pages/Reports.js";
 import { LoginModal } from "./pages/Login.js";
 import { TransactionModal } from "./components/TransactionModal.js";
 import { api, Account, Category, Tag, Transaction, User } from "./services/api.js";
@@ -8,7 +9,7 @@ import { LogOut, User as UserIcon } from "lucide-react";
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "settings">("dashboard");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -160,6 +161,12 @@ export function App() {
             onConfirmPending={handleConfirmPending}
             onOpenSettings={() => setCurrentView("settings")}
           />
+        ) : currentView === "reports" ? (
+          <Reports 
+            transactions={transactions}
+            categories={categories}
+            accounts={accounts}
+          />
         ) : (
           <Settings 
             onBack={() => setCurrentView("dashboard")}
@@ -182,6 +189,16 @@ export function App() {
           >
             <span className="text-xl">🏠</span>
             <span className="text-[11px]">Início</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView("reports")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              currentView === "reports" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <span className="text-xl">📊</span>
+            <span className="text-[11px]">Relatórios</span>
           </button>
 
           <button
