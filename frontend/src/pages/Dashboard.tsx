@@ -41,8 +41,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [transactions, categories, cycleOffset]);
 
   const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
-  const pendingTransactions = transactions.filter(t => t.statusId === 2);
-  const confirmedTransactions = transactions.filter(t => t.statusId === 1);
+
+  // Ordena rigorosamente do mais recente para o mais antigo (data decrescente, e por id decrescente para desempate)
+  const sortByNewestFirst = (a: Transaction, b: Transaction) => {
+    const timeDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return b.id - a.id;
+  };
+
+  const pendingTransactions = useMemo(() => {
+    return transactions.filter(t => t.statusId === 2).sort(sortByNewestFirst);
+  }, [transactions]);
+
+  const confirmedTransactions = useMemo(() => {
+    return transactions.filter(t => t.statusId === 1).sort(sortByNewestFirst);
+  }, [transactions]);
 
   // Filtra transações que caem exatamente dentro do ciclo financeiro selecionado
   const cycleTransactions = useMemo(() => {

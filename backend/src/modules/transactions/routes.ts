@@ -19,7 +19,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     const user = request.user as { id: number };
     const all = await db.select().from(transactions)
       .where(and(isNull(transactions.deletedAt), eq(transactions.userId, user.id)))
-      .orderBy(desc(transactions.date));
+      .orderBy(desc(transactions.date), desc(transactions.id));
     
     const items = await db.select().from(transactionItems).where(isNull(transactionItems.deletedAt));
     const txMap = all.map(t => ({
