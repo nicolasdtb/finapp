@@ -2,7 +2,7 @@
 
 ## 1. Visao Geral do Projeto
 Aplicativo de controle financeiro pessoal moderno, responsivo (Mobile First / PWA e Desktop), inspirado no aplicativo **Minhas Financas**.
-Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com suporte a sincronizacao continua e cadastro automatico de transacoes via webhook de notificacoes bancarias.
+Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com suporte a sincronizacao continua e cadastro automatico de transacoes via webhook de notificacoes bancarias e leitura de Notas Fiscais (QR Code / Danfe).
 
 ---
 
@@ -48,17 +48,21 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
    - `id`, `name`, `color`, `user_id` (FK users).
 6. **Transactions (Lancamentos)**:
    - `id`, `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`, `user_id` (FK users).
-7. **Budgets (Orcamentos)**:
+7. **Transaction Items (Composicao de Itens da Despesa / Nota Fiscal)**:
+   - `id`, `transaction_id` (FK transactions - cascade), `name` (ex: "Arroz 5kg"), `quantity`, `unit_price`, `total_price`, `category_id` (FK categories - opcional).
+8. **Budgets (Orcamentos)**:
    - `id`, `category_id`, `month_year`, `target_amount`, `user_id` (FK users).
 
 ---
 
-## 5. Requisitos Funcionais Futuros (Backlog de Fases)
-1. **CRUD Completo de Gestao Financeira**:
+## 5. Requisitos Funcionais (Backlog de Fases)
+1. **CRUD Completo de Gestao Financeira & Itens de Despesa**:
    - Modal/Tela completa de edicao e remocao de transacoes (com atualizacao de saldo da conta).
-   - Gerenciamento de Contas e Cartoes (criar, editar limite/datas, arquivar).
+   - Detalhamento de itens de um gasto (ex: lista de compras do supermercado somando o valor total).
+   - Suporte futuro a leitura de NF-e / NFC-e (leitura do QR Code da nota fiscal com a camera do celular para importar itens e total automaticamente).
+   - Gerenciamento de Contas e Cartoes (criar, editar limites/datas, arquivar).
    - Gerenciamento de Categorias e Tags personalizadas com seletor de cor e icone.
-   - Opcoes completas para Entradas (Receitas), Saidas (Despesas) e Transferencias.
-2. **Autenticacao & Compartilhamento**:
+   - Opcoes completas para Entradas (Receitas), Saidas (Despesas) e Transferencias entre contas.
+2. **Autenticacao & Compartilhamento (Fase seguinte)**:
    - Tela de Login / Cadastro simples e segura (com hash bcrypt e token JWT).
    - Permitir que ate 3 usuarios cadastrados possam compartilhar a mesma carteira ou ter espacos separados.
