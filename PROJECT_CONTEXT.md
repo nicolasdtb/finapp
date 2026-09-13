@@ -15,7 +15,8 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
 - **Rede e Acesso**: ZeroTier VPN (comunicacao segura entre Celular Android, Computador e VM Linux).
 - **Acesso para Analise / Suporte**: DBeaver via IP do ZeroTier da VM na porta 5432.
 - **Autenticacao & Multi-usuario (ate 3 usuarios)**:
-  - Sistema de Login planejado para a proxima fase (tabela `users`).
+  - Sistema de Login seguro via JWT e `bcryptjs`.
+  - Tabela `users` com soft delete e associacao aos registros financeiros.
 
 ---
 
@@ -45,7 +46,7 @@ O esquema completo e documentado coluna por coluna esta disponivel em:
 
 ---
 
-## 5. Roteiro de Proximos Passos (Roadmap para as Proximas Sessoes)
+## 5. Roteiro de Proximos Passos (Status do Roadmap)
 
 ### ✅ FASE 1 - Fundacao Concluida:
 - [x] Repositorio Git versionado e conectado ao GitHub.
@@ -58,30 +59,27 @@ O esquema completo e documentado coluna por coluna esta disponivel em:
 
 ---
 
-### 🚀 FASE 2 - Autenticacao & Compartilhamento (PROXIMA ETAPA):
-1. **Tabela `users`**:
-   - `id SERIAL PRIMARY KEY`, `name TEXT`, `email TEXT UNIQUE`, `password_hash TEXT`, `created_at`, `deleted_at`.
-2. **Backend**:
-   - Rotas `/api/v1/auth/register` e `/api/v1/auth/login`.
-   - Criptografia com `bcryptjs` e geracao de tokens JWT.
-   - Associar `user_id` nas transacoes, contas e categorias.
-   - Permitir compartilhar a mesma carteira familiar entre ate 3 usuarios com permissoes simples.
-3. **Frontend**:
-   - Tela limpa de Login / Cadastro estilo mobile-first.
-   - Armazenar token no `localStorage` e manter sessao conectada.
+### ✅ FASE 2 - Autenticacao & Compartilhamento Concluida:
+- [x] Tabela `users` com soft delete e campos auditaveis.
+- [x] Criptografia de senhas com `bcryptjs` (salt 10).
+- [x] Autenticacao baseada em token JWT (`@fastify/jwt`).
+- [x] Trava de seguranca limitando no maximo 3 usuarios registrados por instancia.
+- [x] Tela de Login & Cadastro mobile-first com alternancia fluida.
+- [x] Sessao persistente via `localStorage` e botao de Logout.
 
 ---
 
-### 📷 FASE 3 - Leitura de Nota Fiscal (QR Code / Danfe):
+### 🚀 FASE 3 - Leitura de Nota Fiscal (QR Code / Danfe) - PROXIMA ETAPA:
 1. **Scanner de Camera no PWA**:
-   - Integrar biblioteca de leitura de QR Code (`html5-qrcode` ou nativo do navegador).
-   - Ao apontar a camera do celular para o QR Code da nota fiscal (NFC-e do supermercado), extrair a URL da receita estadual (SEFAZ).
+   - Integrar leitor de QR Code via camera do celular.
+   - Ao apontar para o QR Code da NFC-e (nota de supermercado/posto), ler o link da SEFAZ.
 2. **Parser de Nota Fiscal no Backend**:
-   - O backend busca os dados da nota e extrai: nome dos produtos, quantidades, valores e o total exato, populando automaticamente o modal de itens!
+   - Buscar e extrair a lista de produtos (nomes, quantidades e precos unitarios).
+   - Preencher automaticamente a transacao e a lista de itens.
 
 ---
 
 ### 📊 FASE 4 - Relatorios & Graficos Avancados:
-- Grafico de pizza por categoria (onde foi meu dinheiro neste mes?).
-- Grafico de evolucao de patrimonico e saldo ao longo dos meses.
-- Gestao de orcamentos mensais com barra de progresso (ex: gastei 80% do orcamento de Lazer).
+- Grafico de pizza por categoria.
+- Grafico de evolucao de patrimonico e saldo mensal.
+- Gestao de orcamentos mensais com barra de progresso.
