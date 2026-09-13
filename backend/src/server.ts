@@ -4,6 +4,7 @@ import { webhookRoutes } from "./modules/webhooks/routes.js";
 import { transactionRoutes } from "./modules/transactions/routes.js";
 import { accountRoutes } from "./modules/accounts/routes.js";
 import { categoryRoutes } from "./modules/categories/routes.js";
+import { tagRoutes } from "./modules/tags/routes.js";
 import { initDatabase } from "./database/init.js";
 
 const app = Fastify({ logger: true });
@@ -13,7 +14,7 @@ async function start() {
     origin: true
   });
 
-  // Inicializa automaticamente tabelas e seed de enums
+  // Inicializa tabelas e seed com IDs inteiros
   await initDatabase();
 
   // Health check
@@ -24,6 +25,7 @@ async function start() {
   await app.register(transactionRoutes, { prefix: "/api/v1/transactions" });
   await app.register(accountRoutes, { prefix: "/api/v1/accounts" });
   await app.register(categoryRoutes, { prefix: "/api/v1/categories" });
+  await app.register(tagRoutes, { prefix: "/api/v1/tags" });
 
   const port = Number(process.env.PORT) || 3001;
   const host = "0.0.0.0";

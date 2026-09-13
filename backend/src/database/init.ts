@@ -1,34 +1,47 @@
 ﻿import { pool } from "./index.js";
 
 export const createTablesSQL = `
--- 1. TABELAS DE DICIONARIO (ENUMS)
-CREATE TABLE IF NOT EXISTS account_types (
+-- 1. DROP SEGURO DE TODAS AS TABELAS PARA ATUALIZAR IDs PARA INTEIROS
+DROP TABLE IF EXISTS transaction_items CASCADE;
+DROP TABLE IF EXISTS transaction_tags CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS budgets CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS accounts CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
+DROP TABLE IF EXISTS recurrence_types CASCADE;
+DROP TABLE IF EXISTS transaction_statuses CASCADE;
+DROP TABLE IF EXISTS transaction_types CASCADE;
+DROP TABLE IF EXISTS account_types CASCADE;
+
+-- 2. TABELAS DE DICIONARIO (ENUMS)
+CREATE TABLE account_types (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS transaction_types (
+CREATE TABLE transaction_types (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS transaction_statuses (
+CREATE TABLE transaction_statuses (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS recurrence_types (
+CREATE TABLE recurrence_types (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL
 );
 
--- 2. TABELAS DE NEGOCIO
-CREATE TABLE IF NOT EXISTS accounts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- 3. TABELAS DE NEGOCIO COM IDs INTEIROS (SERIAL)
+CREATE TABLE accounts (
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   type_id INTEGER NOT NULL REFERENCES account_types(id) DEFAULT 1,
   balance NUMERIC(12, 2) NOT NULL DEFAULT '0.00',
@@ -41,26 +54,33 @@ CREATE TABLE IF NOT EXISTS accounts (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE categories (
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   type_id INTEGER NOT NULL REFERENCES transaction_types(id) DEFAULT 2,
   color TEXT NOT NULL DEFAULT '#EF4444',
   icon TEXT NOT NULL DEFAULT 'tag',
-  parent_id UUID,
+  parent_id INTEGER,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE tags (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#64748B',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE transactions (
+  id SERIAL PRIMARY KEY,
   description TEXT NOT NULL,
   amount NUMERIC(12, 2) NOT NULL,
   type_id INTEGER NOT NULL REFERENCES transaction_types(id) DEFAULT 2,
   status_id INTEGER NOT NULL REFERENCES transaction_statuses(id) DEFAULT 1,
   date TIMESTAMP NOT NULL,
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  destination_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
-  category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  destination_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   recurrence_id INTEGER REFERENCES recurrence_types(id) DEFAULT 1,
   installment_number INTEGER,
   total_installments INTEGER,
@@ -70,15 +90,32 @@ CREATE TABLE IF NOT EXISTS transactions (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS budgets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+CREATE TABLE transaction_items (
+  id SERIAL PRIMARY KEY,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  quantity NUMERIC(10, 3) NOT NULL DEFAULT 1.000,
+  unit_price NUMERIC(12, 2) NOT NULL,
+  total_price NUMERIC(12, 2) NOT NULL,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE transaction_tags (
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (transaction_id, tag_id)
+);
+
+CREATE TABLE budgets (
+  id SERIAL PRIMARY KEY,
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
   month_year TEXT NOT NULL,
   target_amount NUMERIC(12, 2) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- 3. SEED DOS ENUMS
+-- 4. SEED DOS ENUMS
 INSERT INTO account_types (id, code, name) VALUES 
   (1, 'CHECKING', 'Conta Corrente'),
   (2, 'CREDIT_CARD', 'Cartão de Crédito'),
@@ -106,31 +143,36 @@ INSERT INTO recurrence_types (id, code, name) VALUES
   (6, 'INSTALLMENT', 'Parcelada')
 ON CONFLICT (id) DO NOTHING;
 
--- 4. CONTAS E CATEGORIAS INICIAIS PADRAO SE VAZIO
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM accounts) THEN
-    INSERT INTO accounts (id, name, type_id, balance, color, icon) VALUES
-      ('a0000000-0000-0000-0000-000000000001', 'Nubank (Cartão)', 2, 0.00, '#820AD1', 'credit-card'),
-      ('a0000000-0000-0000-0000-000000000002', 'Banco Inter (Principal)', 1, 3500.00, '#FF7A00', 'wallet'),
-      ('a0000000-0000-0000-0000-000000000003', 'Carteira (Dinheiro)', 4, 120.00, '#10B981', 'banknote');
-  END IF;
+-- 5. SEED INICIAL DE CONTAS E CATEGORIAS
+INSERT INTO accounts (id, name, type_id, balance, color, icon) VALUES
+  (1, 'Nubank (Cartão)', 2, 0.00, '#820AD1', 'credit-card'),
+  (2, 'Banco Inter (Principal)', 1, 3500.00, '#FF7A00', 'wallet'),
+  (3, 'Carteira (Dinheiro)', 4, 120.00, '#10B981', 'banknote')
+ON CONFLICT (id) DO NOTHING;
+SELECT setval('accounts_id_seq', 3);
 
-  IF NOT EXISTS (SELECT 1 FROM categories) THEN
-    INSERT INTO categories (name, type_id, color, icon) VALUES
-      ('Alimentação & Restaurante', 2, '#EF4444', 'utensils'),
-      ('Supermercado', 2, '#F59E0B', 'shopping-cart'),
-      ('Transporte & Combustível', 2, '#3B82F6', 'car'),
-      ('Moradia & Contas', 2, '#8B5CF6', 'home'),
-      ('Salário & Renda', 1, '#10B981', 'dollar-sign');
-  END IF;
-END $$;
+INSERT INTO categories (id, name, type_id, color, icon) VALUES
+  (1, 'Alimentação & Restaurante', 2, '#EF4444', 'utensils'),
+  (2, 'Supermercado', 2, '#F59E0B', 'shopping-cart'),
+  (3, 'Transporte & Combustível', 2, '#3B82F6', 'car'),
+  (4, 'Moradia & Contas', 2, '#8B5CF6', 'home'),
+  (5, 'Lazer & Entretenimento', 2, '#EC4899', 'film'),
+  (6, 'Salário & Renda', 1, '#10B981', 'dollar-sign')
+ON CONFLICT (id) DO NOTHING;
+SELECT setval('categories_id_seq', 6);
+
+INSERT INTO tags (id, name, color) VALUES
+  (1, 'Essencial', '#3B82F6'),
+  (2, 'Supérfluo', '#EF4444'),
+  (3, 'Trabalho', '#10B981')
+ON CONFLICT (id) DO NOTHING;
+SELECT setval('tags_id_seq', 3);
 `;
 
 export async function initDatabase() {
   try {
     await pool.query(createTablesSQL);
-    console.log("✅ Banco de dados, tabelas de dicionário e dados iniciais inicializados com sucesso!");
+    console.log("✅ Banco de dados recriado com sucesso: Todos os IDs agora são inteiros SERIAL!");
   } catch (err) {
     console.error("❌ Erro ao inicializar banco:", err);
   }

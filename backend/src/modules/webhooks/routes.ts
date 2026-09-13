@@ -5,7 +5,7 @@ import { transactions, accounts } from "../../database/schema.js";
 
 export function parseBankNotification(appName: string, text: string) {
   let amount: number | null = null;
-  let establishment: string = "Despesa Bancaria";
+  let establishment: string = "Despesa Bancária";
 
   const amountMatch = text.match(/R\$\s?([\d\.,]+)/i);
   if (amountMatch && amountMatch[1]) {
@@ -41,7 +41,7 @@ export async function webhookRoutes(app: FastifyInstance) {
     if (!parsed.amount) {
       return reply.status(400).send({
         success: false,
-        message: "Nao foi possivel extrair o valor da transacao da notificacao."
+        message: "Não foi possível extrair o valor da transação da notificação."
       });
     }
 
@@ -51,7 +51,7 @@ export async function webhookRoutes(app: FastifyInstance) {
     if (!accountId) {
       return reply.status(422).send({
         success: false,
-        message: "Nenhuma conta cadastrada no app para vincular o lancamento."
+        message: "Nenhuma conta cadastrada no app para vincular o lançamento."
       });
     }
 
@@ -67,7 +67,7 @@ export async function webhookRoutes(app: FastifyInstance) {
 
     return reply.status(201).send({
       success: true,
-      message: "Transacao capturada com sucesso!",
+      message: "Transação capturada com sucesso!",
       transaction: newTx
     });
   });

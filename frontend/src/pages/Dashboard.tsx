@@ -5,10 +5,9 @@ import {
   ArrowDownRight, 
   Plus, 
   Clock, 
-  CheckCircle2, 
   CreditCard,
-  Layers,
-  PieChart
+  Settings,
+  Receipt
 } from "lucide-react";
 import { Transaction, Account } from "../services/api.js";
 
@@ -16,14 +15,18 @@ interface DashboardProps {
   transactions: Transaction[];
   accounts: Account[];
   onNewTransaction: () => void;
+  onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
+  onOpenSettings: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
   transactions, 
   accounts, 
   onNewTransaction, 
-  onConfirmPending 
+  onEditTransaction,
+  onConfirmPending,
+  onOpenSettings
 }) => {
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
 
@@ -31,7 +34,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const pendingTransactions = transactions.filter(t => t.statusId === 2);
   const confirmedTransactions = transactions.filter(t => t.statusId === 1);
 
-  // Calcula despesas e receitas do mes
   const currentMonthExpenses = confirmedTransactions
     .filter(t => t.typeId === 2)
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
@@ -41,7 +43,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
 
   return (
-    <div className="pb-24 pt-4 px-4 max-w-md mx-auto sm:max-w-2xl">
+    <div className="pb-28 pt-4 px-4 max-w-md mx-auto sm:max-w-2xl">
       {/* Alerta de Gastos Capturados via Notificacao Bancaria */}
       {pendingTransactions.length > 0 && (
         <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between">
@@ -69,7 +71,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/60 rounded-3xl p-6 shadow-xl relative overflow-hidden mb-6">
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo Consolidado</span>
-          <Wallet className="w-5 h-5 text-blue-400" />
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onOpenSettings}
+              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl transition"
+              title="Configurações e Gestão"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+            <Wallet className="w-5 h-5 text-blue-400" />
+          </div>
         </div>
         <div className="text-3xl font-extrabold tracking-tight text-white mb-6">
           R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -105,13 +116,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="mb-6">
         <div className="flex justify-between items-center mb-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Minhas Contas & Cartões</h3>
-          <span className="text-xs text-blue-400 cursor-pointer font-medium hover:underline">Ver todas</span>
+          <button 
+            onClick={onOpenSettings}
+            className="text-xs text-blue-400 font-medium hover:underline"
+          >
+            Gerenciar
+          </button>
         </div>
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
           {accounts.map(acc => (
             <div 
               key={acc.id}
-              className="min-w-[150px] bg-slate-800/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-between"
+              className="min-w-[155px] bg-slate-800/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-3">
                 <div 
@@ -145,7 +161,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 activeTab === "all" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"
               }`}
             >
-              Confirmadas
+              Confirmadas ({confirmedTransactions.length})
             </button>
             <button 
               onClick={() => setActiveTab("pending")}
@@ -158,14 +174,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {(activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
             <div 
               key={t.id}
-              onClick={() => t.statusId === 2 && onConfirmPending(t)}
-              className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between transition ${
+              onClick={() => t.statusId === 2 ? onConfirmPending(t) : onEditTransaction(t)}
+              className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${
                 t.statusId === 2 
-                  ? "border-amber-500/40 hover:bg-amber-500/10 cursor-pointer" 
+                  ? "border-amber-500/40 hover:bg-amber-500/10" 
                   : "border-slate-700/40 hover:bg-slate-800"
               }`}
             >
@@ -176,7 +192,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {t.typeId === 1 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
+                    {t.items && t.items.length > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                        <Receipt className="w-3 h-3" />
+                        {t.items.length} itens
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400">
                     {new Date(t.date).toLocaleDateString("pt-BR")}
                     {t.rawBankNotification && " • Via Notificação Bancária"}
@@ -199,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Botao Flutuante de Adicionar (Estilo App Mobile) */}
+      {/* Botao Flutuante de Adicionar */}
       <button 
         onClick={onNewTransaction}
         className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform"

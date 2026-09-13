@@ -1,46 +1,33 @@
 ﻿import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
-import { api, Account, Transaction } from "./services/api.js";
+import { Settings } from "./pages/Settings.js";
+import { TransactionModal } from "./components/TransactionModal.js";
+import { api, Account, Category, Tag, Transaction } from "./services/api.js";
 
 export function App() {
+  const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Carrega dados reais da API e cria contas iniciais se o banco estiver vazio
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      let accs = await api.getAccounts();
-      
-      // Se for a primeira vez e nao houver contas, cria contas padrao
-      if (accs.length === 0) {
-        await api.createAccount({
-          name: "Nubank (Cartão)",
-          typeId: 2, // Cartão de Crédito
-          balance: "0.00",
-          color: "#820AD1",
-          icon: "credit-card"
-        });
-        await api.createAccount({
-          name: "Conta Principal",
-          typeId: 1, // Conta Corrente
-          balance: "2500.00",
-          color: "#3B82F6",
-          icon: "wallet"
-        });
-        await api.createAccount({
-          name: "Carteira Dinheiro",
-          typeId: 4, // Dinheiro físico
-          balance: "150.00",
-          color: "#10B981",
-          icon: "banknote"
-        });
-        accs = await api.getAccounts();
-      }
+      const [accs, cats, tgs, txs] = await Promise.all([
+        api.getAccounts(),
+        api.getCategories(),
+        api.getTags(),
+        api.getTransactions()
+      ]);
       setAccounts(accs);
-
-      const txs = await api.getTransactions();
+      setCategories(cats);
+      setTags(tgs);
       setTransactions(txs);
     } catch (err) {
       console.error("Erro ao carregar dados da API:", err);
@@ -53,39 +40,35 @@ export function App() {
     loadData();
   }, []);
 
+  const handleSaveTransaction = async (data: any) => {
+    try {
+      if (editingTransaction) {
+        await api.updateTransaction(editingTransaction.id, data);
+      } else {
+        await api.createTransaction(data);
+      }
+      await loadData();
+    } catch (err) {
+      alert("Erro ao salvar lançamento.");
+    }
+  };
+
+  const handleDeleteTransaction = async (id: number) => {
+    try {
+      await api.deleteTransaction(id);
+      await loadData();
+    } catch (err) {
+      alert("Erro ao excluir lançamento.");
+    }
+  };
+
   const handleConfirmPending = async (tx: Transaction) => {
     try {
       await api.confirmTransaction(tx.id, {});
       await loadData();
-      alert(`Transação "${tx.description}" confirmada e consolidada!`);
+      alert(`Transação "${tx.description}" confirmada!`);
     } catch (err) {
       alert("Erro ao confirmar transação.");
-    }
-  };
-
-  const handleNewTransaction = async () => {
-    const desc = prompt("Descrição do gasto ou receita:");
-    if (!desc) return;
-    const amountStr = prompt("Valor (ex: 45.50):");
-    if (!amountStr) return;
-
-    if (accounts.length === 0) {
-      alert("Nenhuma conta encontrada para lançar.");
-      return;
-    }
-
-    try {
-      await api.createTransaction({
-        description: desc,
-        amount: amountStr,
-        typeId: 2, // Despesa
-        statusId: 1, // Confirmado
-        date: new Date().toISOString(),
-        accountId: accounts[0].id
-      });
-      await loadData();
-    } catch (err) {
-      alert("Erro ao criar transação.");
     }
   };
 
@@ -93,7 +76,10 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <header className="p-4 border-b border-slate-800 flex justify-between items-center max-w-md mx-auto sm:max-w-2xl w-full">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+          <h1 
+            onClick={() => setCurrentView("dashboard")}
+            className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent cursor-pointer"
+          >
             FinApp
           </h1>
           <p className="text-[11px] text-slate-400">Controle Pessoal & Sincronização</p>
@@ -107,17 +93,47 @@ export function App() {
       <main className="flex-1 w-full">
         {loading ? (
           <div className="flex items-center justify-center p-12 text-slate-400 text-sm">
-            Sincronizando dados com o servidor...
+            Sincronizando com a VM Linux...
           </div>
-        ) : (
+        ) : currentView === "dashboard" ? (
           <Dashboard 
             transactions={transactions}
             accounts={accounts}
-            onNewTransaction={handleNewTransaction}
+            onNewTransaction={() => {
+              setEditingTransaction(null);
+              setIsModalOpen(true);
+            }}
+            onEditTransaction={(tx) => {
+              setEditingTransaction(tx);
+              setIsModalOpen(true);
+            }}
             onConfirmPending={handleConfirmPending}
+            onOpenSettings={() => setCurrentView("settings")}
+          />
+        ) : (
+          <Settings 
+            onBack={() => setCurrentView("dashboard")}
+            accounts={accounts}
+            categories={categories}
+            tags={tags}
+            onRefresh={loadData}
           />
         )}
       </main>
+
+      {/* Modal Rico de Lançamento / Edição */}
+      <TransactionModal 
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTransaction(null);
+        }}
+        onSave={handleSaveTransaction}
+        onDelete={handleDeleteTransaction}
+        accounts={accounts}
+        categories={categories}
+        editingTransaction={editingTransaction}
+      />
     </div>
   );
 }
