@@ -20,49 +20,43 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
 
 ---
 
-## 3. REGRA OBRIGATORIA DE BANCO DE DADOS: Tabelas de Dicionario / ENUMs Tabulares
+## 3. REGRAS OBRIGATORIAS DE BANCO DE DADOS
+
+### Regra A: Tabelas de Dicionario / ENUMs Tabulares
 > **IMPORTANTE PARA A IA**: Qualquer campo de status, tipo, categoria de sistema ou discriminador numerico/codigo DEVE possuir uma tabela de lookup dedicada (tabela de dicionario/enum) contendo `id` (inteiro) e `description`/`name` (texto legivel), com Foreign Key apontando para ela.
 >
 > **Exemplo:** Em vez de guardar apenas `type: 1` ou um enum solto na aplicacao:
 > - Tabela `account_types` (`id: 1, code: 'CHECKING', name: 'Conta Corrente'`, `id: 2, code: 'CREDIT_CARD', name: 'Cartao de Credito'`)
 > - Tabela `transaction_types` (`id: 1, code: 'INCOME', name: 'Receita'`, `id: 2, code: 'EXPENSE', name: 'Despesa'`)
 > - Tabela `transaction_statuses` (`id: 1, code: 'CONFIRMED', name: 'Confirmado'`, `id: 2, code: 'PENDING_CONFIRMATION', name: 'Pendente'`)
->
-> Isso garante total clareza, integridade referencial e legibilidade imediata ao consultar o banco via DBeaver, BI ou SQL puro.
+
+### Regra B: Todos os IDs de Tabelas DEVEM ser Inteiros (SERIAL)
+> **IMPORTANTE PARA A IA**: Nunca utilizar UUIDs como primary keys. Sempre utilizar inteiros sequenciais (`SERIAL PRIMARY KEY` no PostgreSQL ou `serial("id")` no Drizzle), facilitando a analise no DBeaver e relatorios.
+
+### Regra C: Soft Deletes Obrigatórios
+> **IMPORTANTE PARA A IA**: Toda exclusão de dados de negócio (`accounts`, `categories`, `tags`, `transactions`, `transaction_items`, `budgets`) NUNCA deve ser um `DELETE` físico direto no banco de dados.
+> As tabelas devem possuir a coluna `deleted_at TIMESTAMP DEFAULT NULL`. A exclusão é feita atualizando `deleted_at = NOW()`. Todas as queries de listagem e leitura devem filtrar `WHERE deleted_at IS NULL`.
+> No caso de exclusão de transações, o saldo da conta deve ser estornado apropriadamente.
 
 ---
 
 ## 4. Modelo de Dados Principal (Entidades)
 1. **Users (Multi-usuario)**:
-   - `id`, `name`, `email`, `password_hash`, `created_at`.
+   - `id` (INT), `name`, `email`, `password_hash`, `created_at`, `deleted_at`.
 2. **Lookup Tables (Tabelas de Dominio / Enum)**:
    - `account_types`: id, code, name
    - `transaction_types`: id, code, name
    - `transaction_statuses`: id, code, name
    - `recurrence_types`: id, code, name
 3. **Accounts (Contas/Cartoes)**:
-   - `id`, `name`, `type_id` (FK account_types), `balance`, `color`, `icon`, `credit_limit`, `closing_day`, `due_day`, `user_id` (FK users).
+   - `id` (INT SERIAL), `name`, `type_id` (FK account_types), `balance`, `color`, `icon`, `credit_limit`, `closing_day`, `due_day`, `user_id`, `deleted_at`.
 4. **Categories (Categorias & Subcategorias)**:
-   - `id`, `name`, `type_id` (FK transaction_types), `color`, `icon`, `parent_id`, `user_id` (FK users).
+   - `id` (INT SERIAL), `name`, `type_id` (FK transaction_types), `color`, `icon`, `parent_id`, `user_id`, `deleted_at`.
 5. **Tags (Etiquetas/Marcadores)**:
-   - `id`, `name`, `color`, `user_id` (FK users).
+   - `id` (INT SERIAL), `name`, `color`, `user_id`, `deleted_at`.
 6. **Transactions (Lancamentos)**:
-   - `id`, `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`, `user_id` (FK users).
+   - `id` (INT SERIAL), `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`, `user_id`, `deleted_at`.
 7. **Transaction Items (Composicao de Itens da Despesa / Nota Fiscal)**:
-   - `id`, `transaction_id` (FK transactions - cascade), `name` (ex: "Arroz 5kg"), `quantity`, `unit_price`, `total_price`, `category_id` (FK categories - opcional).
+   - `id` (INT SERIAL), `transaction_id` (FK transactions), `name`, `quantity`, `unit_price`, `total_price`, `category_id`, `deleted_at`.
 8. **Budgets (Orcamentos)**:
-   - `id`, `category_id`, `month_year`, `target_amount`, `user_id` (FK users).
-
----
-
-## 5. Requisitos Funcionais (Backlog de Fases)
-1. **CRUD Completo de Gestao Financeira & Itens de Despesa**:
-   - Modal/Tela completa de edicao e remocao de transacoes (com atualizacao de saldo da conta).
-   - Detalhamento de itens de um gasto (ex: lista de compras do supermercado somando o valor total).
-   - Suporte futuro a leitura de NF-e / NFC-e (leitura do QR Code da nota fiscal com a camera do celular para importar itens e total automaticamente).
-   - Gerenciamento de Contas e Cartoes (criar, editar limites/datas, arquivar).
-   - Gerenciamento de Categorias e Tags personalizadas com seletor de cor e icone.
-   - Opcoes completas para Entradas (Receitas), Saidas (Despesas) e Transferencias entre contas.
-2. **Autenticacao & Compartilhamento (Fase seguinte)**:
-   - Tela de Login / Cadastro simples e segura (com hash bcrypt e token JWT).
-   - Permitir que ate 3 usuarios cadastrados possam compartilhar a mesma carteira ou ter espacos separados.
+   - `id` (INT SERIAL), `category_id`, `month_year`, `target_amount`, `user_id`, `deleted_at`.

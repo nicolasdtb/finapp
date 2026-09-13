@@ -2,11 +2,11 @@
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { accounts } from "../../database/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 export async function accountRoutes(app: FastifyInstance) {
   app.get("/", async (request, reply) => {
-    const list = await db.select().from(accounts);
+    const list = await db.select().from(accounts).where(isNull(accounts.deletedAt));
     return reply.send(list);
   });
 
@@ -47,7 +47,8 @@ export async function accountRoutes(app: FastifyInstance) {
 
   app.delete("/:id", async (request, reply) => {
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
-    await db.delete(accounts).where(eq(accounts.id, id));
-    return reply.send({ success: true, message: "Conta excluída" });
+    // SOFT DELETE
+    await db.update(accounts).set({ deletedAt: new Date() }).where(eq(accounts.id, id));
+    return reply.send({ success: true, message: "Conta excluída (soft delete)" });
   });
 }

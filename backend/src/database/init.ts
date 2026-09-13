@@ -1,7 +1,7 @@
 ﻿import { pool } from "./index.js";
 
 export const createTablesSQL = `
--- 1. DROP SEGURO DE TODAS AS TABELAS PARA ATUALIZAR IDs PARA INTEIROS
+-- 1. RECRIA TABELAS COM SOFT DELETE (deleted_at)
 DROP TABLE IF EXISTS transaction_items CASCADE;
 DROP TABLE IF EXISTS transaction_tags CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
@@ -14,7 +14,6 @@ DROP TABLE IF EXISTS transaction_statuses CASCADE;
 DROP TABLE IF EXISTS transaction_types CASCADE;
 DROP TABLE IF EXISTS account_types CASCADE;
 
--- 2. TABELAS DE DICIONARIO (ENUMS)
 CREATE TABLE account_types (
   id INTEGER PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
@@ -39,7 +38,6 @@ CREATE TABLE recurrence_types (
   name TEXT NOT NULL
 );
 
--- 3. TABELAS DE NEGOCIO COM IDs INTEIROS (SERIAL)
 CREATE TABLE accounts (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
@@ -51,7 +49,8 @@ CREATE TABLE accounts (
   closing_day INTEGER,
   due_day INTEGER,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 CREATE TABLE categories (
@@ -61,14 +60,16 @@ CREATE TABLE categories (
   color TEXT NOT NULL DEFAULT '#EF4444',
   icon TEXT NOT NULL DEFAULT 'tag',
   parent_id INTEGER,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 CREATE TABLE tags (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   color TEXT NOT NULL DEFAULT '#64748B',
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 CREATE TABLE transactions (
@@ -78,44 +79,47 @@ CREATE TABLE transactions (
   type_id INTEGER NOT NULL REFERENCES transaction_types(id) DEFAULT 2,
   status_id INTEGER NOT NULL REFERENCES transaction_statuses(id) DEFAULT 1,
   date TIMESTAMP NOT NULL,
-  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  destination_account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  destination_account_id INTEGER REFERENCES accounts(id),
+  category_id INTEGER REFERENCES categories(id),
   recurrence_id INTEGER REFERENCES recurrence_types(id) DEFAULT 1,
   installment_number INTEGER,
   total_installments INTEGER,
   raw_bank_notification TEXT,
   notes TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 CREATE TABLE transaction_items (
   id SERIAL PRIMARY KEY,
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id),
   name TEXT NOT NULL,
   quantity NUMERIC(10, 3) NOT NULL DEFAULT 1.000,
   unit_price NUMERIC(12, 2) NOT NULL,
   total_price NUMERIC(12, 2) NOT NULL,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  category_id INTEGER REFERENCES categories(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 CREATE TABLE transaction_tags (
-  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id),
+  tag_id INTEGER NOT NULL REFERENCES tags(id),
   PRIMARY KEY (transaction_id, tag_id)
 );
 
 CREATE TABLE budgets (
   id SERIAL PRIMARY KEY,
-  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id INTEGER NOT NULL REFERENCES categories(id),
   month_year TEXT NOT NULL,
   target_amount NUMERIC(12, 2) NOT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
--- 4. SEED DOS ENUMS
+-- SEED DOS ENUMS
 INSERT INTO account_types (id, code, name) VALUES 
   (1, 'CHECKING', 'Conta Corrente'),
   (2, 'CREDIT_CARD', 'Cartão de Crédito'),
@@ -143,7 +147,7 @@ INSERT INTO recurrence_types (id, code, name) VALUES
   (6, 'INSTALLMENT', 'Parcelada')
 ON CONFLICT (id) DO NOTHING;
 
--- 5. SEED INICIAL DE CONTAS E CATEGORIAS
+-- SEED INICIAL DE CONTAS E CATEGORIAS
 INSERT INTO accounts (id, name, type_id, balance, color, icon) VALUES
   (1, 'Nubank (Cartão)', 2, 0.00, '#820AD1', 'credit-card'),
   (2, 'Banco Inter (Principal)', 1, 3500.00, '#FF7A00', 'wallet'),
@@ -172,7 +176,7 @@ SELECT setval('tags_id_seq', 3);
 export async function initDatabase() {
   try {
     await pool.query(createTablesSQL);
-    console.log("✅ Banco de dados recriado com sucesso: Todos os IDs agora são inteiros SERIAL!");
+    console.log("✅ Banco de dados recriado com suporte a SOFT DELETES (deleted_at)!");
   } catch (err) {
     console.error("❌ Erro ao inicializar banco:", err);
   }

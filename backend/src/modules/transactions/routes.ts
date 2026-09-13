@@ -2,15 +2,16 @@
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, transactionItems, accounts } from "../../database/schema.js";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 
 export async function transactionRoutes(app: FastifyInstance) {
-  // Listar transacoes completas com itens e conta
+  // Listar transacoes ativas (ignora soft-deleted)
   app.get("/", async (request, reply) => {
-    const all = await db.select().from(transactions).orderBy(desc(transactions.date));
+    const all = await db.select().from(transactions)
+      .where(isNull(transactions.deletedAt))
+      .orderBy(desc(transactions.date));
     
-    // Anexa itens a cada transacao
-    const items = await db.select().from(transactionItems);
+    const items = await db.select().from(transactionItems).where(isNull(transactionItems.deletedAt));
     const txMap = all.map(t => ({
       ...t,
       items: items.filter(i => i.transactionId === t.id)
@@ -19,7 +20,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.send(txMap);
   });
 
-  // Criar transacao manual (com suporte a itens detalhados)
+  // Criar transacao
   app.post("/", async (request, reply) => {
     const schema = z.object({
       description: z.string().min(1),
@@ -54,7 +55,6 @@ export async function transactionRoutes(app: FastifyInstance) {
       notes: data.notes,
     }).returning();
 
-    // Se houver itens detalhados de despesa (ex: compras de supermercado)
     if (data.items && data.items.length > 0) {
       await db.insert(transactionItems).values(
         data.items.map(item => ({
@@ -68,15 +68,13 @@ export async function transactionRoutes(app: FastifyInstance) {
       );
     }
 
-    // Atualiza saldo da conta automaticamente
+    // Atualiza saldo da conta
     const amountNum = parseFloat(data.amount);
     if (data.typeId === 1) {
-      // Receita: soma ao saldo
       await db.update(accounts)
         .set({ balance: sql`${accounts.balance} + ${amountNum}` })
         .where(eq(accounts.id, data.accountId));
     } else if (data.typeId === 2) {
-      // Despesa: subtrai do saldo
       await db.update(accounts)
         .set({ balance: sql`${accounts.balance} - ${amountNum}` })
         .where(eq(accounts.id, data.accountId));
@@ -85,12 +83,10 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.status(201).send(created);
   });
 
-  // Atualizar / Editar transacao
+  // Atualizar transacao
   app.put("/:id", async (request, reply) => {
-    const paramsSchema = z.object({ id: z.coerce.number() });
-    const { id } = paramsSchema.parse(request.params);
-
-    const bodySchema = z.object({
+    const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
+    const schema = z.object({
       description: z.string().min(1).optional(),
       amount: z.string().optional(),
       typeId: z.number().optional(),
@@ -101,7 +97,7 @@ export async function transactionRoutes(app: FastifyInstance) {
       notes: z.string().optional(),
     });
 
-    const data = bodySchema.parse(request.body);
+    const data = schema.parse(request.body);
     const [updated] = await db.update(transactions)
       .set({
         ...data,
@@ -114,31 +110,53 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  // Excluir transacao
+  // SOFT DELETE de transacao (marca deleted_at e estorna saldo)
   app.delete("/:id", async (request, reply) => {
-    const paramsSchema = z.object({ id: z.coerce.number() });
-    const { id } = paramsSchema.parse(request.params);
+    const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
 
-    await db.delete(transactions).where(eq(transactions.id, id));
-    return reply.send({ success: true, message: "Transação excluída com sucesso" });
+    const [tx] = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+    if (tx) {
+      // Estorna saldo na conta
+      const amountNum = parseFloat(tx.amount);
+      if (tx.typeId === 1) {
+        // Estorno de receita: subtrai do saldo
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amountNum}` })
+          .where(eq(accounts.id, tx.accountId));
+      } else if (tx.typeId === 2) {
+        // Estorno de despesa: devolve para a conta
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amountNum}` })
+          .where(eq(accounts.id, tx.accountId));
+      }
+
+      // Marca como deletado
+      await db.update(transactions)
+        .set({ deletedAt: new Date() })
+        .where(eq(transactions.id, id));
+
+      await db.update(transactionItems)
+        .set({ deletedAt: new Date() })
+        .where(eq(transactionItems.transactionId, id));
+    }
+
+    return reply.send({ success: true, message: "Transação excluída (soft delete)" });
   });
 
   // Confirmar transacao pendente de notificacao bancaria
   app.patch("/:id/confirm", async (request, reply) => {
-    const paramsSchema = z.object({ id: z.coerce.number() });
-    const bodySchema = z.object({
+    const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
+    const schema = z.object({
       categoryId: z.number().optional(),
       accountId: z.number().optional(),
       description: z.string().optional()
     });
 
-    const { id } = paramsSchema.parse(request.params);
-    const updates = bodySchema.parse(request.body);
-
+    const updates = schema.parse(request.body);
     const [updated] = await db.update(transactions)
       .set({
         ...updates,
-        statusId: 1, // 1 = CONFIRMED
+        statusId: 1,
         updatedAt: new Date(),
       })
       .where(eq(transactions.id, id))

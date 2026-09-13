@@ -2,11 +2,11 @@
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { categories } from "../../database/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 export async function categoryRoutes(app: FastifyInstance) {
   app.get("/", async (request, reply) => {
-    const list = await db.select().from(categories);
+    const list = await db.select().from(categories).where(isNull(categories.deletedAt));
     return reply.send(list);
   });
 
@@ -41,7 +41,8 @@ export async function categoryRoutes(app: FastifyInstance) {
 
   app.delete("/:id", async (request, reply) => {
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
-    await db.delete(categories).where(eq(categories.id, id));
-    return reply.send({ success: true, message: "Categoria excluída" });
+    // SOFT DELETE
+    await db.update(categories).set({ deletedAt: new Date() }).where(eq(categories.id, id));
+    return reply.send({ success: true, message: "Categoria excluída (soft delete)" });
   });
 }

@@ -2,11 +2,11 @@
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { tags } from "../../database/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 export async function tagRoutes(app: FastifyInstance) {
   app.get("/", async (request, reply) => {
-    const list = await db.select().from(tags);
+    const list = await db.select().from(tags).where(isNull(tags.deletedAt));
     return reply.send(list);
   });
 
@@ -23,7 +23,8 @@ export async function tagRoutes(app: FastifyInstance) {
 
   app.delete("/:id", async (request, reply) => {
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
-    await db.delete(tags).where(eq(tags.id, id));
-    return reply.send({ success: true, message: "Tag excluída" });
+    // SOFT DELETE
+    await db.update(tags).set({ deletedAt: new Date() }).where(eq(tags.id, id));
+    return reply.send({ success: true, message: "Tag excluída (soft delete)" });
   });
 }

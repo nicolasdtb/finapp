@@ -29,10 +29,9 @@ export const recurrenceTypes = pgTable("recurrence_types", {
 });
 
 // ==========================================
-// 2. TABELAS DE NEGOCIO (TODOS OS IDs COMO INTEIROS)
+// 2. TABELAS DE NEGOCIO (COM SOFT DELETE - deleted_at)
 // ==========================================
 
-// Contas e Cartoes
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -45,9 +44,9 @@ export const accounts = pgTable("accounts", {
   dueDay: integer("due_day"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
 
-// Categorias
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -56,17 +55,17 @@ export const categories = pgTable("categories", {
   icon: text("icon").notNull().default("tag"),
   parentId: integer("parent_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
 
-// Tags / Marcadores
 export const tags = pgTable("tags", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   color: text("color").notNull().default("#64748B"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
 
-// Transacoes / Lancamentos
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   description: text("description").notNull(),
@@ -75,12 +74,10 @@ export const transactions = pgTable("transactions", {
   statusId: integer("status_id").references(() => transactionStatuses.id).notNull().default(1),
   date: timestamp("date").notNull(),
   
-  // Relacionamentos
-  accountId: integer("account_id").references(() => accounts.id, { onDelete: "cascade" }).notNull(),
-  destinationAccountId: integer("destination_account_id").references(() => accounts.id, { onDelete: "set null" }),
-  categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
+  accountId: integer("account_id").references(() => accounts.id).notNull(),
+  destinationAccountId: integer("destination_account_id").references(() => accounts.id),
+  categoryId: integer("category_id").references(() => categories.id),
 
-  // Recorrencia e Parcelas
   recurrenceId: integer("recurrence_id").references(() => recurrenceTypes.id).default(1),
   installmentNumber: integer("installment_number"),
   totalInstallments: integer("total_installments"),
@@ -90,31 +87,31 @@ export const transactions = pgTable("transactions", {
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
 
-// Itens da Transacao (Detalhamento de Compras / Supermercado / Nota Fiscal)
 export const transactionItems = pgTable("transaction_items", {
   id: serial("id").primaryKey(),
-  transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "cascade" }).notNull(),
+  transactionId: integer("transaction_id").references(() => transactions.id).notNull(),
   name: text("name").notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull().default("1.000"),
   unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
   totalPrice: numeric("total_price", { precision: 12, scale: 2 }).notNull(),
-  categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
+  categoryId: integer("category_id").references(() => categories.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
 
-// Relacionamento Transacao <-> Tags
 export const transactionTags = pgTable("transaction_tags", {
-  transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "cascade" }).notNull(),
-  tagId: integer("tag_id").references(() => tags.id, { onDelete: "cascade" }).notNull(),
+  transactionId: integer("transaction_id").references(() => transactions.id).notNull(),
+  tagId: integer("tag_id").references(() => tags.id).notNull(),
 });
 
-// Orcamentos
 export const budgets = pgTable("budgets", {
   id: serial("id").primaryKey(),
-  categoryId: integer("category_id").references(() => categories.id, { onDelete: "cascade" }).notNull(),
+  categoryId: integer("category_id").references(() => categories.id).notNull(),
   monthYear: text("month_year").notNull(),
   targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // SOFT DELETE
 });
