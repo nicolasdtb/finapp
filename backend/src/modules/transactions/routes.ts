@@ -1,19 +1,13 @@
 ﻿import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
-import { transactions, categories, accounts } from "../../database/schema.js";
+import { transactions } from "../../database/schema.js";
 import { desc, eq } from "drizzle-orm";
 
 export async function transactionRoutes(app: FastifyInstance) {
   // Listar transacoes
   app.get("/", async (request, reply) => {
-    const all = await db.query.transactions.findMany({
-      orderBy: [desc(transactions.date)],
-      with: {
-        account: true,
-        category: true,
-      }
-    });
+    const all = await db.select().from(transactions).orderBy(desc(transactions.date));
     return reply.send(all);
   });
 
@@ -22,7 +16,8 @@ export async function transactionRoutes(app: FastifyInstance) {
     const schema = z.object({
       description: z.string().min(1),
       amount: z.string(),
-      type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
+      typeId: z.number().default(2), // 1: Receita, 2: Despesa, 3: Transferencia
+      statusId: z.number().default(1), // 1: Confirmado, 2: Pendente
       date: z.string(), // ISO string
       accountId: z.string().uuid(),
       categoryId: z.string().uuid().optional(),
@@ -35,13 +30,13 @@ export async function transactionRoutes(app: FastifyInstance) {
     const [created] = await db.insert(transactions).values({
       description: data.description,
       amount: data.amount,
-      type: data.type,
+      typeId: data.typeId,
+      statusId: data.statusId,
       date: new Date(data.date),
       accountId: data.accountId,
       categoryId: data.categoryId,
       destinationAccountId: data.destinationAccountId,
       notes: data.notes,
-      status: "CONFIRMED"
     }).returning();
 
     return reply.status(201).send(created);
@@ -62,7 +57,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     const [updated] = await db.update(transactions)
       .set({
         ...updates,
-        status: "CONFIRMED",
+        statusId: 1, // 1 = CONFIRMED
         updatedAt: new Date(),
       })
       .where(eq(transactions.id, id))
