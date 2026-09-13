@@ -40,15 +40,15 @@ export async function transactionRoutes(app: FastifyInstance) {
       statusId: z.number().default(1),
       date: z.string(),
       accountId: z.number(),
-      categoryId: z.number().optional(),
-      destinationAccountId: z.number().optional(),
-      notes: z.string().optional(),
+      categoryId: z.number().nullable().optional(),
+      destinationAccountId: z.number().nullable().optional(),
+      notes: z.string().nullable().optional(),
       items: z.array(z.object({
         name: z.string().min(1),
         quantity: z.string().default("1"),
         unitPrice: z.string(),
         totalPrice: z.string(),
-        categoryId: z.number().optional(),
+        categoryId: z.number().nullable().optional(),
       })).optional()
     });
 
@@ -106,14 +106,15 @@ export async function transactionRoutes(app: FastifyInstance) {
       statusId: z.number().optional(),
       date: z.string().optional(),
       accountId: z.number().optional(),
-      categoryId: z.number().optional(),
-      notes: z.string().optional(),
+      categoryId: z.number().nullable().optional(),
+      destinationAccountId: z.number().nullable().optional(),
+      notes: z.string().nullable().optional(),
       items: z.array(z.object({
         name: z.string().min(1),
         quantity: z.string().default("1"),
         unitPrice: z.string(),
         totalPrice: z.string(),
-        categoryId: z.number().optional(),
+        categoryId: z.number().nullable().optional(),
       })).optional()
     });
 

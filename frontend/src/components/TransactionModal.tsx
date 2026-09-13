@@ -204,10 +204,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Categoria</label>
               <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
+                value={categoryId ?? ""}
+                onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
               >
+                <option value="">Sem categoria</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
