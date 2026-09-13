@@ -205,7 +205,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {(activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
             <div 
               key={t.id}
-              onClick={() => t.statusId === 2 ? onConfirmPending(t) : onEditTransaction(t)}
+              onClick={() => onEditTransaction(t)}
               className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${
                 t.statusId === 2 
                   ? "border-amber-500/40 hover:bg-amber-500/10" 

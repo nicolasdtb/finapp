@@ -95,7 +95,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.status(201).send(created);
   });
 
-  // Atualizar transacao do usuario
+  // Atualizar transacao do usuario (incluindo detalhamento de itens)
   app.put("/:id", async (request, reply) => {
     const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
@@ -108,17 +108,80 @@ export async function transactionRoutes(app: FastifyInstance) {
       accountId: z.number().optional(),
       categoryId: z.number().optional(),
       notes: z.string().optional(),
+      items: z.array(z.object({
+        name: z.string().min(1),
+        quantity: z.string().default("1"),
+        unitPrice: z.string(),
+        totalPrice: z.string(),
+        categoryId: z.number().optional(),
+      })).optional()
     });
 
     const data = schema.parse(request.body);
+
+    // Busca transação antiga para ajustar diferença de saldo se o valor ou conta mudou
+    const [oldTx] = await db.select().from(transactions)
+      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
+      .limit(1);
+
+    if (!oldTx) {
+      return reply.status(404).send({ success: false, message: "Transação não encontrada." });
+    }
+
+    const { items, ...txFields } = data;
+
     const [updated] = await db.update(transactions)
       .set({
-        ...data,
-        date: data.date ? new Date(data.date) : undefined,
+        ...txFields,
+        date: txFields.date ? new Date(txFields.date) : undefined,
         updatedAt: new Date()
       })
       .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
       .returning();
+
+    // Se foram enviados novos itens detalhados de compra/NF
+    if (items !== undefined) {
+      // Remove itens antigos (soft delete)
+      await db.update(transactionItems)
+        .set({ deletedAt: new Date() })
+        .where(eq(transactionItems.transactionId, id));
+
+      // Insere os novos itens
+      if (items.length > 0) {
+        await db.insert(transactionItems).values(
+          items.map(item => ({
+            transactionId: id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            categoryId: item.categoryId || updated.categoryId,
+          }))
+        );
+      }
+    }
+
+    // Ajuste de saldo caso o valor tenha mudado e a transação esteja confirmada
+    if (data.amount && oldTx.statusId === 1) {
+      const oldAmount = parseFloat(oldTx.amount);
+      const newAmount = parseFloat(data.amount);
+      const diff = newAmount - oldAmount;
+
+      if (diff !== 0) {
+        const accId = data.accountId || oldTx.accountId;
+        if (oldTx.typeId === 1) {
+          // Receita aumentou -> soma a diferença no saldo
+          await db.update(accounts)
+            .set({ balance: sql`${accounts.balance} + ${diff}` })
+            .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
+        } else if (oldTx.typeId === 2) {
+          // Despesa aumentou -> subtrai a diferença do saldo
+          await db.update(accounts)
+            .set({ balance: sql`${accounts.balance} - ${diff}` })
+            .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
+        }
+      }
+    }
 
     return reply.send(updated);
   });
