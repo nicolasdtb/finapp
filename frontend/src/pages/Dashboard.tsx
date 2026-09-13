@@ -1,0 +1,211 @@
+﻿import React, { useState } from "react";
+import { 
+  Wallet, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Plus, 
+  Clock, 
+  CheckCircle2, 
+  CreditCard,
+  Layers,
+  PieChart
+} from "lucide-react";
+import { Transaction, Account } from "../services/api.js";
+
+interface DashboardProps {
+  transactions: Transaction[];
+  accounts: Account[];
+  onNewTransaction: () => void;
+  onConfirmPending: (tx: Transaction) => void;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ 
+  transactions, 
+  accounts, 
+  onNewTransaction, 
+  onConfirmPending 
+}) => {
+  const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
+
+  const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
+  const pendingTransactions = transactions.filter(t => t.statusId === 2);
+  const confirmedTransactions = transactions.filter(t => t.statusId === 1);
+
+  // Calcula despesas e receitas do mes
+  const currentMonthExpenses = confirmedTransactions
+    .filter(t => t.typeId === 2)
+    .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
+
+  const currentMonthIncome = confirmedTransactions
+    .filter(t => t.typeId === 1)
+    .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
+
+  return (
+    <div className="pb-24 pt-4 px-4 max-w-md mx-auto sm:max-w-2xl">
+      {/* Alerta de Gastos Capturados via Notificacao Bancaria */}
+      {pendingTransactions.length > 0 && (
+        <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm text-amber-300">
+                {pendingTransactions.length} gasto{pendingTransactions.length > 1 ? "s" : ""} bancário detectado
+              </h4>
+              <p className="text-xs text-slate-400">Toque para categorizar e confirmar</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setActiveTab("pending")}
+            className="px-3 py-1.5 bg-amber-500 text-slate-950 font-semibold text-xs rounded-xl shadow-sm hover:bg-amber-400 transition"
+          >
+            Revisar
+          </button>
+        </div>
+      )}
+
+      {/* Cartao de Saldo Geral estilo Minhas Financas */}
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/60 rounded-3xl p-6 shadow-xl relative overflow-hidden mb-6">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo Consolidado</span>
+          <Wallet className="w-5 h-5 text-blue-400" />
+        </div>
+        <div className="text-3xl font-extrabold tracking-tight text-white mb-6">
+          R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 border-t border-slate-700/60 pt-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Receitas</p>
+              <p className="text-sm font-bold text-emerald-400">
+                + R$ {currentMonthIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl">
+              <ArrowDownRight className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Despesas</p>
+              <p className="text-sm font-bold text-rose-400">
+                - R$ {currentMonthExpenses.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Carrossel de Contas e Cartoes */}
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Minhas Contas & Cartões</h3>
+          <span className="text-xs text-blue-400 cursor-pointer font-medium hover:underline">Ver todas</span>
+        </div>
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+          {accounts.map(acc => (
+            <div 
+              key={acc.id}
+              className="min-w-[150px] bg-slate-800/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
+                  style={{ backgroundColor: acc.color || "#3B82F6" }}
+                >
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                  {acc.typeId === 2 ? "Cartão" : "Conta"}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-medium truncate">{acc.name}</p>
+                <p className="text-sm font-bold text-slate-100">
+                  R$ {parseFloat(acc.balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista de Transacoes Recentes */}
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setActiveTab("all")}
+              className={`text-xs px-3 py-1 rounded-full font-medium transition ${
+                activeTab === "all" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              Confirmadas
+            </button>
+            <button 
+              onClick={() => setActiveTab("pending")}
+              className={`text-xs px-3 py-1 rounded-full font-medium transition flex items-center gap-1 ${
+                activeTab === "pending" ? "bg-amber-500 text-slate-950 font-bold" : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              Pendentes ({pendingTransactions.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {(activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
+            <div 
+              key={t.id}
+              onClick={() => t.statusId === 2 && onConfirmPending(t)}
+              className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between transition ${
+                t.statusId === 2 
+                  ? "border-amber-500/40 hover:bg-amber-500/10 cursor-pointer" 
+                  : "border-slate-700/40 hover:bg-slate-800"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${
+                  t.typeId === 1 ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                }`}>
+                  {t.typeId === 1 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
+                  <p className="text-xs text-slate-400">
+                    {new Date(t.date).toLocaleDateString("pt-BR")}
+                    {t.rawBankNotification && " • Via Notificação Bancária"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className={`text-sm font-bold ${
+                  t.typeId === 1 ? "text-emerald-400" : "text-slate-100"
+                }`}>
+                  {t.typeId === 1 ? "+" : "-"} R$ {parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </span>
+                {t.statusId === 2 && (
+                  <p className="text-[10px] text-amber-400 font-medium">Toque p/ aprovar</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Botao Flutuante de Adicionar (Estilo App Mobile) */}
+      <button 
+        onClick={onNewTransaction}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform"
+      >
+        <Plus className="w-7 h-7" />
+      </button>
+    </div>
+  );
+};

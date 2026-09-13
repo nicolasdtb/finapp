@@ -1,0 +1,17 @@
+﻿{
+  "short_name": "FinApp",
+  "name": "FinApp - Controle Financeiro Pessoal",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "display": "standalone",
+  "orientation": "portrait"
+}
