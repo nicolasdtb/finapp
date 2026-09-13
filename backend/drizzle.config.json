@@ -1,0 +1,8 @@
+﻿{
+  "out": "./drizzle",
+  "schema": "./src/database/schema.ts",
+  "driver": "pg",
+  "dbCredentials": {
+    "connectionString": "postgresql://finapp_user:finapp_password@postgres:5432/finapp"
+  }
+}

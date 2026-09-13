@@ -2,7 +2,7 @@
 import pg from "pg";
 import * as schema from "./schema.js";
 
-const pool = new pg.Pool({
+export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://finapp_user:finapp_password@localhost:5432/finapp",
 });
 

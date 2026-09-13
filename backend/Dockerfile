@@ -11,8 +11,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm install
 COPY --from=builder /app/dist ./dist
+COPY drizzle.config.ts ./
+COPY src/database/schema.ts ./src/database/schema.ts
 
 EXPOSE 3001
 CMD ["node", "dist/server.js"]

@@ -4,13 +4,17 @@ import { webhookRoutes } from "./modules/webhooks/routes.js";
 import { transactionRoutes } from "./modules/transactions/routes.js";
 import { accountRoutes } from "./modules/accounts/routes.js";
 import { categoryRoutes } from "./modules/categories/routes.js";
+import { initDatabase } from "./database/init.js";
 
 const app = Fastify({ logger: true });
 
 async function start() {
   await app.register(cors, {
-    origin: true // Permite acesso do PWA via ZeroTier ou localhost
+    origin: true
   });
+
+  // Inicializa automaticamente tabelas e seed de enums
+  await initDatabase();
 
   // Health check
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
@@ -22,7 +26,7 @@ async function start() {
   await app.register(categoryRoutes, { prefix: "/api/v1/categories" });
 
   const port = Number(process.env.PORT) || 3001;
-  const host = "0.0.0.0"; // Obrigatorio para escutar na interface do ZeroTier e Docker
+  const host = "0.0.0.0";
 
   try {
     await app.listen({ port, host });
