@@ -1,4 +1,4 @@
-﻿# PROJECT CONTEXT: FinApp (Controle Financeiro Pessoal)
+# PROJECT CONTEXT: FinApp (Controle Financeiro Pessoal)
 
 ## 1. Visao Geral do Projeto
 Aplicativo de controle financeiro pessoal moderno, responsivo (Mobile First / PWA e Desktop), inspirado no aplicativo **Minhas Financas**.
@@ -69,17 +69,21 @@ O esquema completo e documentado coluna por coluna esta disponivel em:
 
 ---
 
-### 🚀 FASE 3 - Leitura de Nota Fiscal (QR Code / Danfe) - PROXIMA ETAPA:
-1. **Scanner de Camera no PWA**:
-   - Integrar leitor de QR Code via camera do celular.
-   - Ao apontar para o QR Code da NFC-e (nota de supermercado/posto), ler o link da SEFAZ.
-2. **Parser de Nota Fiscal no Backend**:
-   - Buscar e extrair a lista de produtos (nomes, quantidades e precos unitarios).
-   - Preencher automaticamente a transacao e a lista de itens.
+### ✅ FASE 4 - Relatorios, Inteligencia & Metas de Orcamento Concluida:
+- [x] Isolamento estrito de dados por usuario (`user_id` em todas as consultas e tabelas).
+- [x] Motor de Ciclo Financeiro Dinamico (detecta salario real ou calcula 5o dia util).
+- [x] Seletor de periodo global no topo (navegacao entre ciclos de salario).
+- [x] Barra de navegacao inferior mobile-first nativa com botao central '+'.
+- [x] Tela de Relatorios com distribuicao por categorias, taxa de poupanca e Top 5 ofensores.
+- [x] Tela de Metas de Orcamento com calculo preditivo de estouro (Burn-Rate) e ritmo diario.
+- [x] Webhook inteligente de notificacoes bancarias com identificacao por usuario e match de conta.
+- [x] Guia de automacao mobile atualizado (Automate/Tasker/Termux).
 
 ---
 
-### 📊 FASE 4 - Relatorios & Graficos Avancados:
-- Grafico de pizza por categoria.
-- Grafico de evolucao de patrimonico e saldo mensal.
-- Gestao de orcamentos mensais com barra de progresso.
+### 🚀 PROXIMOS PASSOS:
+1. **Fase 3: Leitura de Nota Fiscal (QR Code / NFC-e)**:
+   - Scanner de camera no PWA com suporte a HTTPS para ler QR Code de notas de supermercado.
+   - Parser de itens da SEFAZ para preenchimento automatico do modal de transacao com itens detalhados.
+2. **Importador de Extrato Bancario (OFX / CSV)**:
+   - Upload de extratos do banco com deteccao inteligente de duplicidade e auto-categorizacao.

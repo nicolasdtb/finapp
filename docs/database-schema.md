@@ -1,4 +1,4 @@
-﻿# Dicionario de Dados & Estrutura do Banco de Dados: FinApp
+# Dicionario de Dados & Estrutura do Banco de Dados: FinApp
 
 Este documento e a referencia oficial de todas as tabelas, colunas, tipos de dados, relacionamentos e enums do FinApp para desenvolvedores, IAs e consultas via DBeaver.
 
@@ -132,8 +132,17 @@ Armazena a classificacao da conta financeira.
 | :--- | :--- | :--- | :--- |
 | `id` | SERIAL PK | Nao | Identificador unico |
 | `category_id`| INTEGER FK | Nao | Vinculo com `categories.id` |
-| `month_year` | TEXT | Nao | Mes de referencia formato `YYYY-MM` |
+| `month_year` | TEXT | Nao | Mes de referencia formato `YYYY-MM` ou `default` |
 | `target_amount`| NUMERIC(12,2)| Nao | Teto orcamentario estipulado |
 | `user_id` | INTEGER FK | Sim | Usuario proprietario |
 | `created_at` | TIMESTAMP | Nao | Data de criacao |
 | `deleted_at` | TIMESTAMP | Sim | Soft delete timestamp |
+
+### 3.8. `user_settings` (Configurações de Ciclo Financeiro do Usuário)
+| Coluna | Tipo | Nulo? | Descricao |
+| :--- | :--- | :--- | :--- |
+| `user_id` | INTEGER PK | Nao | Referencia `users.id` |
+| `cycle_type` | TEXT | Nao | Tipo de ciclo: `salary_transaction`, `fifth_business_day`, `calendar_month` |
+| `custom_salary_day`| INTEGER | Sim | Dia fixo personalizado (default 5) |
+| `updated_at` | TIMESTAMP | Nao | Data da última atualização |
+
