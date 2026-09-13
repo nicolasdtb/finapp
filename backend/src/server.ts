@@ -1,5 +1,7 @@
 ﻿import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyJwt from "@fastify/jwt";
+import { authRoutes } from "./modules/auth/routes.js";
 import { webhookRoutes } from "./modules/webhooks/routes.js";
 import { transactionRoutes } from "./modules/transactions/routes.js";
 import { accountRoutes } from "./modules/accounts/routes.js";
@@ -14,13 +16,19 @@ async function start() {
     origin: true
   });
 
-  // Inicializa tabelas e seed com IDs inteiros
+  // JWT Plugin
+  await app.register(fastifyJwt, {
+    secret: process.env.JWT_SECRET || "finapp_super_secret_jwt_key_2026_change_in_env"
+  });
+
+  // Inicializa tabelas, usuarios e seeds
   await initDatabase();
 
   // Health check
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
   // Modulos da aplicacao
+  await app.register(authRoutes, { prefix: "/api/v1/auth" });
   await app.register(webhookRoutes, { prefix: "/api/v1/webhooks" });
   await app.register(transactionRoutes, { prefix: "/api/v1/transactions" });
   await app.register(accountRoutes, { prefix: "/api/v1/accounts" });

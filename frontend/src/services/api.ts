@@ -3,6 +3,20 @@ const API_URL = (typeof window !== "undefined" && window.__FINAPP_API_URL__)
   ? (window as any).__FINAPP_API_URL__ 
   : (import.meta.env.VITE_API_URL || "http://localhost:3001/api/v1");
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("@finapp:token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+  };
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface Account {
   id: number;
   name: string;
@@ -43,8 +57,8 @@ export interface Transaction {
   id: number;
   description: string;
   amount: string;
-  typeId: number;   // 1: Receita, 2: Despesa, 3: Transferencia
-  statusId: number; // 1: Confirmado, 2: Pendente
+  typeId: number;
+  statusId: number;
   date: string;
   accountId: number;
   destinationAccountId?: number;
@@ -55,15 +69,41 @@ export interface Transaction {
 }
 
 export const api = {
+  // Autenticação
+  async login(email: string, password: string): Promise<{ success: boolean; token?: string; user?: User; message?: string }> {
+    const res = await fetch(`${API_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  },
+
+  async register(name: string, email: string, password: string): Promise<{ success: boolean; token?: string; user?: User; message?: string }> {
+    const res = await fetch(`${API_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+    return res.json();
+  },
+
+  async getMe(): Promise<{ user?: User }> {
+    const res = await fetch(`${API_URL}/auth/me`, {
+      headers: getAuthHeaders(),
+    });
+    return res.json();
+  },
+
   // Contas
   async getAccounts(): Promise<Account[]> {
-    const res = await fetch(`${API_URL}/accounts`);
+    const res = await fetch(`${API_URL}/accounts`, { headers: getAuthHeaders() });
     return res.json();
   },
   async createAccount(data: Partial<Account>): Promise<Account> {
     const res = await fetch(`${API_URL}/accounts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
@@ -71,61 +111,61 @@ export const api = {
   async updateAccount(id: number, data: Partial<Account>): Promise<Account> {
     const res = await fetch(`${API_URL}/accounts/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
   },
   async deleteAccount(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_URL}/accounts/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_URL}/accounts/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
 
   // Categorias
   async getCategories(): Promise<Category[]> {
-    const res = await fetch(`${API_URL}/categories`);
+    const res = await fetch(`${API_URL}/categories`, { headers: getAuthHeaders() });
     return res.json();
   },
   async createCategory(data: Partial<Category>): Promise<Category> {
     const res = await fetch(`${API_URL}/categories`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
   },
   async deleteCategory(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_URL}/categories/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_URL}/categories/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
 
   // Tags
   async getTags(): Promise<Tag[]> {
-    const res = await fetch(`${API_URL}/tags`);
+    const res = await fetch(`${API_URL}/tags`, { headers: getAuthHeaders() });
     return res.json();
   },
   async createTag(data: Partial<Tag>): Promise<Tag> {
     const res = await fetch(`${API_URL}/tags`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
   },
   async deleteTag(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_URL}/tags/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_URL}/tags/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
 
   // Transações
   async getTransactions(): Promise<Transaction[]> {
-    const res = await fetch(`${API_URL}/transactions`);
+    const res = await fetch(`${API_URL}/transactions`, { headers: getAuthHeaders() });
     return res.json();
   },
   async createTransaction(data: Partial<Transaction>): Promise<Transaction> {
     const res = await fetch(`${API_URL}/transactions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
@@ -133,19 +173,19 @@ export const api = {
   async updateTransaction(id: number, data: Partial<Transaction>): Promise<Transaction> {
     const res = await fetch(`${API_URL}/transactions/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return res.json();
   },
   async deleteTransaction(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_URL}/transactions/${id}`, { method: "DELETE" });
+    const res = await fetch(`${API_URL}/transactions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
   async confirmTransaction(id: number, updates: { categoryId?: number; accountId?: number; description?: string }): Promise<Transaction> {
     const res = await fetch(`${API_URL}/transactions/${id}/confirm`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(updates),
     });
     return res.json();

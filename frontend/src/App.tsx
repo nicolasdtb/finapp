@@ -1,10 +1,13 @@
 ﻿import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
 import { Settings } from "./pages/Settings.js";
+import { LoginModal } from "./pages/Login.js";
 import { TransactionModal } from "./components/TransactionModal.js";
-import { api, Account, Category, Tag, Transaction } from "./services/api.js";
+import { api, Account, Category, Tag, Transaction, User } from "./services/api.js";
+import { LogOut, User as UserIcon } from "lucide-react";
 
 export function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<"dashboard" | "settings">("dashboard");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -15,6 +18,29 @@ export function App() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+  // Verifica se o usuário já está autenticado via token salvo
+  const checkAuth = async () => {
+    const token = localStorage.getItem("@finapp:token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await api.getMe();
+      if (res.user) {
+        setCurrentUser(res.user);
+        await loadData();
+      } else {
+        localStorage.removeItem("@finapp:token");
+      }
+    } catch {
+      localStorage.removeItem("@finapp:token");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -37,8 +63,13 @@ export function App() {
   };
 
   useEffect(() => {
-    loadData();
+    checkAuth();
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("@finapp:token");
+    setCurrentUser(null);
+  };
 
   const handleSaveTransaction = async (data: any) => {
     try {
@@ -72,6 +103,18 @@ export function App() {
     }
   };
 
+  // Se não estiver logado, exibe a tela de login/cadastro
+  if (!loading && !currentUser) {
+    return (
+      <LoginModal
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          loadData();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <header className="p-4 border-b border-slate-800 flex justify-between items-center max-w-md mx-auto sm:max-w-2xl w-full">
@@ -82,11 +125,17 @@ export function App() {
           >
             FinApp
           </h1>
-          <p className="text-[11px] text-slate-400">Controle Pessoal & Sincronização</p>
+          <p className="text-[11px] text-slate-400">Olá, {currentUser?.name} • ZeroTier Ativo</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="text-xs text-slate-400 font-medium">ZeroTier Conectado</span>
+          <button
+            onClick={handleLogout}
+            title="Sair da conta"
+            className="p-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-800 transition flex items-center gap-1.5 text-xs font-medium"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Sair</span>
+          </button>
         </div>
       </header>
 

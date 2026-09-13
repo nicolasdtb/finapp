@@ -1,7 +1,20 @@
 ﻿import { pgTable, text, timestamp, numeric, integer, serial } from "drizzle-orm/pg-core";
 
 // ==========================================
-// 1. TABELAS DE DICIONARIO / ENUM (LOOKUPS)
+// 1. USUARIOS (AUTENTICACAO & MULTI-USUARIO)
+// ==========================================
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // Soft Delete
+});
+
+// ==========================================
+// 2. TABELAS DE DICIONARIO / ENUM (LOOKUPS)
 // ==========================================
 
 export const accountTypes = pgTable("account_types", {
@@ -29,7 +42,7 @@ export const recurrenceTypes = pgTable("recurrence_types", {
 });
 
 // ==========================================
-// 2. TABELAS DE NEGOCIO (COM SOFT DELETE - deleted_at)
+// 3. TABELAS DE NEGOCIO (COM SOFT DELETE)
 // ==========================================
 
 export const accounts = pgTable("accounts", {
@@ -42,9 +55,10 @@ export const accounts = pgTable("accounts", {
   creditLimit: numeric("credit_limit", { precision: 12, scale: 2 }),
   closingDay: integer("closing_day"),
   dueDay: integer("due_day"),
+  userId: integer("user_id").references(() => users.id), // Criador da conta
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
 
 export const categories = pgTable("categories", {
@@ -54,16 +68,18 @@ export const categories = pgTable("categories", {
   color: text("color").notNull().default("#EF4444"),
   icon: text("icon").notNull().default("tag"),
   parentId: integer("parent_id"),
+  userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
 
 export const tags = pgTable("tags", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   color: text("color").notNull().default("#64748B"),
+  userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
 
 export const transactions = pgTable("transactions", {
@@ -84,10 +100,11 @@ export const transactions = pgTable("transactions", {
 
   rawBankNotification: text("raw_bank_notification"),
   notes: text("notes"),
+  userId: integer("user_id").references(() => users.id), // Quem lançou
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
 
 export const transactionItems = pgTable("transaction_items", {
@@ -99,7 +116,7 @@ export const transactionItems = pgTable("transaction_items", {
   totalPrice: numeric("total_price", { precision: 12, scale: 2 }).notNull(),
   categoryId: integer("category_id").references(() => categories.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
 
 export const transactionTags = pgTable("transaction_tags", {
@@ -112,6 +129,7 @@ export const budgets = pgTable("budgets", {
   categoryId: integer("category_id").references(() => categories.id).notNull(),
   monthYear: text("month_year").notNull(),
   targetAmount: numeric("target_amount", { precision: 12, scale: 2 }).notNull(),
+  userId: integer("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // SOFT DELETE
+  deletedAt: timestamp("deleted_at"), // Soft Delete
 });
