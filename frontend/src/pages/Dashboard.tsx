@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Wallet, 
   ArrowUpRight, 
@@ -10,6 +10,8 @@ import {
   Receipt
 } from "lucide-react";
 import { Transaction, Account } from "../services/api.js";
+import { PeriodSelector } from "../components/PeriodSelector.js";
+import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -29,21 +31,44 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onOpenSettings
 }) => {
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
+  const [cycleOffset, setCycleOffset] = useState<number>(0);
+
+  // Calcula o período atual (entre salários ou 5º dia útil)
+  const currentPeriod = useMemo(() => {
+    return calculateFinancialPeriods(transactions, cycleOffset);
+  }, [transactions, cycleOffset]);
 
   const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
   const pendingTransactions = transactions.filter(t => t.statusId === 2);
   const confirmedTransactions = transactions.filter(t => t.statusId === 1);
 
-  const currentMonthExpenses = confirmedTransactions
+  // Filtra transações que caem exatamente dentro do ciclo financeiro selecionado
+  const cycleTransactions = useMemo(() => {
+    return confirmedTransactions.filter(t => {
+      const d = new Date(t.date);
+      return d >= currentPeriod.startDate && d <= currentPeriod.endDate;
+    });
+  }, [confirmedTransactions, currentPeriod]);
+
+  const currentMonthExpenses = cycleTransactions
     .filter(t => t.typeId === 2)
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
 
-  const currentMonthIncome = confirmedTransactions
+  const currentMonthIncome = cycleTransactions
     .filter(t => t.typeId === 1)
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
 
+
   return (
     <div className="pb-28 pt-4 px-4 max-w-md mx-auto sm:max-w-2xl">
+      {/* Seletor de Período Financeiro (Entre salários / 5º dia útil) */}
+      <PeriodSelector
+        period={currentPeriod}
+        onPrevCycle={() => setCycleOffset(prev => prev - 1)}
+        onNextCycle={() => setCycleOffset(prev => Math.min(prev + 1, 0))}
+        onResetCurrent={() => setCycleOffset(0)}
+      />
+
       {/* Alerta de Gastos Capturados via Notificacao Bancaria */}
       {pendingTransactions.length > 0 && (
         <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between">

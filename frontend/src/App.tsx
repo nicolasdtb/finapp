@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
 import { Settings } from "./pages/Settings.js";
 import { LoginModal } from "./pages/Login.js";
@@ -139,7 +139,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="flex-1 w-full">
+      <main className="flex-1 w-full pb-20">
         {loading ? (
           <div className="flex items-center justify-center p-12 text-slate-400 text-sm">
             Sincronizando com a VM Linux...
@@ -169,6 +169,42 @@ export function App() {
           />
         )}
       </main>
+
+      {/* Barra de Navegação Inferior Nativa (estilo Minhas Finanças) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2">
+        <div className="max-w-md mx-auto flex items-center justify-around">
+          <button
+            onClick={() => setCurrentView("dashboard")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              currentView === "dashboard" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <span className="text-xl">🏠</span>
+            <span className="text-[11px]">Início</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingTransaction(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full shadow-lg shadow-emerald-500/25 -mt-5 hover:scale-105 active:scale-95 transition"
+            title="Nova Transação"
+          >
+            <span className="text-2xl font-bold">+</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView("settings")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              currentView === "settings" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <span className="text-xl">⚙️</span>
+            <span className="text-[11px]">Ajustes</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Modal Rico de Lançamento / Edição */}
       <TransactionModal 

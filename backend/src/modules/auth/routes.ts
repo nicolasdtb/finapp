@@ -1,4 +1,4 @@
-﻿import { FastifyInstance } from "fastify";
+import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "../../database/index.js";
@@ -50,22 +50,21 @@ export async function authRoutes(app: FastifyInstance) {
       createdAt: users.createdAt
     });
 
-    // 5. Se for o primeiro usuario da instancia, cria contas e categorias iniciais associadas a ele
-    if (userCount.value === 0) {
-      await db.insert(accounts).values([
-        { name: "Nubank (Cartão)", typeId: 2, balance: "0.00", color: "#820AD1", icon: "credit-card", userId: newUser.id },
-        { name: "Banco Inter (Conta)", typeId: 1, balance: "2500.00", color: "#FF7A00", icon: "wallet", userId: newUser.id },
-        { name: "Carteira Dinheiro", typeId: 4, balance: "100.00", color: "#10B981", icon: "banknote", userId: newUser.id }
-      ]);
+    // 5. Cria contas e categorias iniciais associadas exclusivamente a esse novo usuário
+    await db.insert(accounts).values([
+      { name: "Banco Inter (Conta)", typeId: 1, balance: "0.00", color: "#FF7A00", icon: "wallet", userId: newUser.id },
+      { name: "Nubank (Cartão)", typeId: 2, balance: "0.00", color: "#820AD1", icon: "credit-card", userId: newUser.id },
+      { name: "Carteira Dinheiro", typeId: 4, balance: "0.00", color: "#10B981", icon: "banknote", userId: newUser.id }
+    ]);
 
-      await db.insert(categories).values([
-        { name: "Alimentação & Restaurante", typeId: 2, color: "#EF4444", icon: "utensils", userId: newUser.id },
-        { name: "Supermercado", typeId: 2, color: "#F59E0B", icon: "shopping-cart", userId: newUser.id },
-        { name: "Transporte & Combustível", typeId: 2, color: "#3B82F6", icon: "car", userId: newUser.id },
-        { name: "Moradia & Contas", typeId: 2, color: "#8B5CF6", icon: "home", userId: newUser.id },
-        { name: "Salário & Renda", typeId: 1, color: "#10B981", icon: "dollar-sign", userId: newUser.id }
-      ]);
-    }
+    await db.insert(categories).values([
+      { name: "Salário & Renda", typeId: 1, color: "#10B981", icon: "dollar-sign", userId: newUser.id },
+      { name: "Alimentação & Restaurante", typeId: 2, color: "#EF4444", icon: "utensils", userId: newUser.id },
+      { name: "Supermercado", typeId: 2, color: "#F59E0B", icon: "shopping-cart", userId: newUser.id },
+      { name: "Transporte & Combustível", typeId: 2, color: "#3B82F6", icon: "car", userId: newUser.id },
+      { name: "Moradia & Contas", typeId: 2, color: "#8B5CF6", icon: "home", userId: newUser.id },
+      { name: "Lazer & Viagens", typeId: 2, color: "#EC4899", icon: "party-popper", userId: newUser.id }
+    ]);
 
     // 6. Gera token JWT
     const token = app.jwt.sign({ id: newUser.id, name: newUser.name, email: newUser.email });

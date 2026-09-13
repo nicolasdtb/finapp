@@ -1,4 +1,4 @@
-﻿import { pgTable, text, timestamp, numeric, integer, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric, integer, serial } from "drizzle-orm/pg-core";
 
 // ==========================================
 // 1. USUARIOS (AUTENTICACAO & MULTI-USUARIO)
@@ -133,3 +133,11 @@ export const budgets = pgTable("budgets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"), // Soft Delete
 });
+
+export const userSettings = pgTable("user_settings", {
+  userId: integer("user_id").references(() => users.id).primaryKey(),
+  cycleType: text("cycle_type").notNull().default("salary_transaction"), // 'salary_transaction' | 'fifth_business_day' | 'calendar_month' | 'fixed_day'
+  customSalaryDay: integer("custom_salary_day").default(5),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+

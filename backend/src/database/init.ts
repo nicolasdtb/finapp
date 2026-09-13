@@ -1,4 +1,4 @@
-﻿import { pool } from "./index.js";
+import { pool } from "./index.js";
 
 export const createTablesSQL = `
 -- 1. TABELA DE USUARIOS
@@ -121,6 +121,13 @@ CREATE TABLE IF NOT EXISTS budgets (
   user_id INTEGER REFERENCES users(id),
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   deleted_at TIMESTAMP DEFAULT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id),
+  cycle_type TEXT NOT NULL DEFAULT 'salary_transaction',
+  custom_salary_day INTEGER DEFAULT 5,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- SEED DOS ENUMS

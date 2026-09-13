@@ -1,14 +1,24 @@
-﻿import { FastifyInstance } from "fastify";
+import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
-import { transactions, transactionItems, accounts } from "../../database/schema.js";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { transactions, transactionItems, accounts, categories, tags } from "../../database/schema.js";
+import { desc, eq, isNull, sql, and } from "drizzle-orm";
 
 export async function transactionRoutes(app: FastifyInstance) {
-  // Listar transacoes ativas (ignora soft-deleted)
+  // Hook de autenticacao obrigatoria
+  app.addHook("preHandler", async (request, reply) => {
+    try {
+      await request.jwtVerify();
+    } catch (err) {
+      return reply.status(401).send({ success: false, message: "Não autorizado." });
+    }
+  });
+
+  // Listar transacoes do usuario logado (ignora soft-deleted)
   app.get("/", async (request, reply) => {
+    const user = request.user as { id: number };
     const all = await db.select().from(transactions)
-      .where(isNull(transactions.deletedAt))
+      .where(and(isNull(transactions.deletedAt), eq(transactions.userId, user.id)))
       .orderBy(desc(transactions.date));
     
     const items = await db.select().from(transactionItems).where(isNull(transactionItems.deletedAt));
@@ -20,8 +30,9 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.send(txMap);
   });
 
-  // Criar transacao
+  // Criar transacao associada ao usuario logado
   app.post("/", async (request, reply) => {
+    const user = request.user as { id: number };
     const schema = z.object({
       description: z.string().min(1),
       amount: z.string(),
@@ -53,6 +64,7 @@ export async function transactionRoutes(app: FastifyInstance) {
       categoryId: data.categoryId,
       destinationAccountId: data.destinationAccountId,
       notes: data.notes,
+      userId: user.id
     }).returning();
 
     if (data.items && data.items.length > 0) {
@@ -68,23 +80,24 @@ export async function transactionRoutes(app: FastifyInstance) {
       );
     }
 
-    // Atualiza saldo da conta
+    // Atualiza saldo da conta garantindo que pertence ao usuario
     const amountNum = parseFloat(data.amount);
     if (data.typeId === 1) {
       await db.update(accounts)
         .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-        .where(eq(accounts.id, data.accountId));
+        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
     } else if (data.typeId === 2) {
       await db.update(accounts)
         .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-        .where(eq(accounts.id, data.accountId));
+        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
     }
 
     return reply.status(201).send(created);
   });
 
-  // Atualizar transacao
+  // Atualizar transacao do usuario
   app.put("/:id", async (request, reply) => {
+    const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
     const schema = z.object({
       description: z.string().min(1).optional(),
@@ -104,7 +117,7 @@ export async function transactionRoutes(app: FastifyInstance) {
         date: data.date ? new Date(data.date) : undefined,
         updatedAt: new Date()
       })
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
       .returning();
 
     return reply.send(updated);
@@ -112,9 +125,13 @@ export async function transactionRoutes(app: FastifyInstance) {
 
   // SOFT DELETE de transacao (marca deleted_at e estorna saldo)
   app.delete("/:id", async (request, reply) => {
+    const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
 
-    const [tx] = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+    const [tx] = await db.select().from(transactions)
+      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
+      .limit(1);
+
     if (tx) {
       // Estorna saldo na conta
       const amountNum = parseFloat(tx.amount);
@@ -122,18 +139,18 @@ export async function transactionRoutes(app: FastifyInstance) {
         // Estorno de receita: subtrai do saldo
         await db.update(accounts)
           .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-          .where(eq(accounts.id, tx.accountId));
+          .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
       } else if (tx.typeId === 2) {
         // Estorno de despesa: devolve para a conta
         await db.update(accounts)
           .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-          .where(eq(accounts.id, tx.accountId));
+          .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
       }
 
       // Marca como deletado
       await db.update(transactions)
         .set({ deletedAt: new Date() })
-        .where(eq(transactions.id, id));
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
 
       await db.update(transactionItems)
         .set({ deletedAt: new Date() })
@@ -145,6 +162,7 @@ export async function transactionRoutes(app: FastifyInstance) {
 
   // Confirmar transacao pendente de notificacao bancaria
   app.patch("/:id/confirm", async (request, reply) => {
+    const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
     const schema = z.object({
       categoryId: z.number().optional(),
@@ -159,7 +177,7 @@ export async function transactionRoutes(app: FastifyInstance) {
         statusId: 1,
         updatedAt: new Date(),
       })
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
       .returning();
 
     return reply.send(updated);
