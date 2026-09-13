@@ -25,7 +25,7 @@ export function parseBankNotification(appName: string, text: string) {
   // Padrão C: Compra aprovada no Estabelecimento
   const directMatch = text.match(/compra\s+(?:de\s+R\$\s*[\d\.,]+\s+)?(?:aprovada\s+)?(?:em|no|na)\s+([^,\.]+?)(?:\.|$)/i);
 
-  if (pixMatch && pixMatch[1] && text.toLowerCase().includes("transfer") || text.toLowerCase().includes("pix")) {
+  if (pixMatch && pixMatch[1] && (text.toLowerCase().includes("transfer") || text.toLowerCase().includes("pix"))) {
     establishment = `Pix: ${pixMatch[1].trim()}`;
   } else if (directMatch && directMatch[1]) {
     establishment = directMatch[1].trim();
