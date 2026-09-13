@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, Camera, ShoppingBag } from "lucide-react";
 import { Account, Category, Transaction, TransactionItem } from "../services/api.js";
 
@@ -73,16 +73,45 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
+  // Sincroniza o estado do modal se o editingTransaction mudar
+  useEffect(() => {
+    if (editingTransaction) {
+      setTypeId(editingTransaction.typeId);
+      setDescription(editingTransaction.description);
+      setAmount(editingTransaction.amount);
+      setAccountId(editingTransaction.accountId);
+      setCategoryId(editingTransaction.categoryId);
+      setDate(editingTransaction.date ? editingTransaction.date.split("T")[0] : new Date().toISOString().split("T")[0]);
+      setNotes(editingTransaction.notes || "");
+      setShowItems(Boolean(editingTransaction.items && editingTransaction.items.length > 0));
+      setItems(editingTransaction.items || []);
+    } else {
+      setTypeId(2);
+      setDescription("");
+      setAmount("");
+      setAccountId(accounts[0]?.id || 1);
+      setCategoryId(categories[0]?.id);
+      setDate(new Date().toISOString().split("T")[0]);
+      setNotes("");
+      setShowItems(false);
+      setItems([]);
+    }
+  }, [editingTransaction, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount) return;
+
+    // Envia a data com meio-dia local (12:00:00) para evitar que o UTC recue 1 dia no fuso horário do Brasil (UTC-3)
+    const [y, m, d] = date.split("-").map(Number);
+    const localDate = new Date(y, m - 1, d, 12, 0, 0);
 
     await onSave({
       description,
       amount,
       typeId,
       statusId: 1,
-      date: new Date(date).toISOString(),
+      date: localDate.toISOString(),
       accountId,
       categoryId,
       notes,
