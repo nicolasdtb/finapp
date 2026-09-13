@@ -218,5 +218,27 @@ export const api = {
       headers: getAuthHeaders(),
     });
     return res.json();
+  },
+
+  // Leitura de Nota Fiscal
+  async parseInvoice(url: string): Promise<{ success: boolean; data?: ParsedInvoiceResult; message?: string }> {
+    const res = await fetch(`${API_URL}/invoices/parse`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ url }),
+    });
+    return res.json();
   }
 };
+
+export interface ParsedInvoiceResult {
+  storeName: string;
+  totalAmount: string;
+  date: string;
+  items: {
+    name: string;
+    quantity: string;
+    unitPrice: string;
+    totalPrice: string;
+  }[];
+}

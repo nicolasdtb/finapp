@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, Camera, ShoppingBag } from "lucide-react";
-import { Account, Category, Transaction, TransactionItem } from "../services/api.js";
+import { Account, Category, Transaction, TransactionItem, api } from "../services/api.js";
 import { 
   formatCentsToBRL, 
   parseInputToCents, 
@@ -8,6 +8,7 @@ import {
   centsToDecimalString,
   formatQuantity 
 } from "../utils/currency.js";
+import { QrScannerModal } from "./QrScannerModal.js";
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -48,6 +49,46 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState("1");
   const [itemPriceCents, setItemPriceCents] = useState<number>(0);
+
+  // Leitor de Nota Fiscal (QR Code)
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isScanningInvoice, setIsScanningInvoice] = useState(false);
+
+  const handleScanInvoice = async (url: string) => {
+    try {
+      setIsScanningInvoice(true);
+      const res = await api.parseInvoice(url);
+
+      if (res.success && res.data) {
+        const { storeName, totalAmount, date: invDate, items: invItems } = res.data;
+
+        // Auto-preenche os dados da transação
+        if (storeName && (!description || description === "Nova Despesa")) {
+          setDescription(storeName);
+        }
+        if (invDate) {
+          setDate(invDate);
+        }
+
+        if (invItems && invItems.length > 0) {
+          setShowItems(true);
+          setItems(invItems);
+          const totalCents = decimalToCents(totalAmount);
+          setAmountCents(totalCents > 0 ? totalCents : invItems.reduce((acc, i) => acc + decimalToCents(i.totalPrice), 0));
+        } else if (totalAmount) {
+          setAmountCents(decimalToCents(totalAmount));
+        }
+
+        setIsScannerOpen(false);
+      } else {
+        alert(res.message || "Não foi possível extrair os produtos desta nota.");
+      }
+    } catch (err: any) {
+      alert("Erro ao consultar nota fiscal: " + (err.message || err));
+    } finally {
+      setIsScanningInvoice(false);
+    }
+  };
 
   const handleAddItem = () => {
     if (!itemName || itemPriceCents <= 0) return;
@@ -251,8 +292,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               {showItems && (
                 <button
                   type="button"
-                  onClick={() => alert("Leitura de QR Code / NF-e será conectada com a câmera do celular na próxima etapa!")}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition"
                 >
                   <Camera className="w-3.5 h-3.5 text-amber-400" />
                   Ler Nota Fiscal
@@ -363,6 +404,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Modal Leitor de QR Code / NFC-e */}
+      <QrScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScanSuccess={handleScanInvoice}
+        isLoading={isScanningInvoice}
+      />
     </div>
   );
 };

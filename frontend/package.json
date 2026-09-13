@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "finapp-frontend",
   "private": true,
   "version": "1.0.0",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.0",
+    "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.359.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
