@@ -4,13 +4,13 @@
     container_name: finapp_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: finapp_user
-      POSTGRES_PASSWORD: finapp_password
-      POSTGRES_DB: finapp
+      POSTGRES_USER: ${DB_USER:-finapp_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-finapp_password}
+      POSTGRES_DB: ${DB_NAME:-finapp}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
 
   backend:
     build:
@@ -19,9 +19,9 @@
     container_name: finapp_backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://finapp_user:finapp_password@postgres:5432/finapp
-      PORT: 3001
-      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-finapp_user}:${DB_PASSWORD:-finapp_password}@postgres:5432/${DB_NAME:-finapp}
+      PORT: ${PORT:-3001}
+      NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "3001:3001"
     depends_on:
