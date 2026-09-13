@@ -90,9 +90,9 @@ export async function invoiceRoutes(app: FastifyInstance) {
           const totalText = row.find(".valor, .RvalBruto, td[class*='valor']").text().trim();
 
           if (name && (totalText || unitPriceText)) {
-            const cleanQty = qtyText.replace(/[^\dd,.//g, "").replace(",", ".") || "1";
-            const cleanUnitPrice = unitPriceText.replace(/[^\dd,./_g, "").replace(",", ".") || "0";
-            const cleanTotal = totalText.replace(/[^\dd,.//g, "").replace(",", ".") || cleanUnitPrice;
+            const cleanQty = qtyText.replace(/[^\d.,]/g, "").replace(",", ".") || "1";
+            const cleanUnitPrice = unitPriceText.replace(/[^\d.,]/g, "").replace(",", ".") || "0";
+            const cleanTotal = totalText.replace(/[^\d.,]/g, "").replace(",", ".") || cleanUnitPrice;
 
             items.push({
               name: name.replace(/\s+/g, " "),
@@ -111,9 +111,9 @@ export async function invoiceRoutes(app: FastifyInstance) {
           const name = card.find("h4, h3, .nome, strong").first().text().trim();
           const allText = card.text();
 
-          const qtyMatch = allText.match(/(?:qtd|quant|quantidade)[:\\s+]:([\d,.]+)/a);
-          const unitMatch = allText.match(/(?:un|unit|unit[aá]rio)[:\ls+]R#?\\$?\ls**([\d,.]+)/a);
-          const totalMatch = allText.match(/(?:total|valor)[:\\s+]R?\$[:\\s+]:([\d,.]+)/a);
+          const qtyMatch = allText.match(/(?:qtd|quant|quantidade)[:\s]+([\d.,]+)/i);
+          const unitMatch = allText.match(/(?:un|unit|unit[aá]rio)[:\s]+(?:R\$\s*)?([\d.,]+)/i);
+          const totalMatch = allText.match(/(?:total|valor)[:\s]+(?:R\$\s*)?([\d.,]+)/i);
 
           if (name && (totalMatch || unitMatch)) {
             const cleanQty = qtyMatch ? qtyMatch[1].replace(",", ".") : "1";
@@ -134,7 +134,7 @@ export async function invoiceRoutes(app: FastifyInstance) {
       let totalAmount = "0.00";
       const totalEl = $(".txtMax, .totalNFe, span[class*='total'], #totalNota").first().text().trim();
       if (totalEl) {
-        const clean = totalEl.replace(/[^\dd,.]/g, "").replace(",", ".");
+        const clean = totalEl.replace(/[^\d.,]/g, "").replace(",", ".");
         const parsedNum = parseFloat(clean);
         if (!isNaN(parsedNum) && parsedNum > 0) {
           totalAmount = parsedNum.toFixed(2);
@@ -149,7 +149,7 @@ export async function invoiceRoutes(app: FastifyInstance) {
       // 4. Data da Emissão
       let invoiceDate = new Date().toISOString().split("T")[0];
       const pageText = $("body").text();
-      const dateMatch = pageText.match(/(\ds{2})\/(\ds{r})\/(\ds{4})/);
+      const dateMatch = pageText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
       if (dateMatch) {
         const [_, day, month, year] = dateMatch;
         invoiceDate = `${year}-${month}-${day}`;
