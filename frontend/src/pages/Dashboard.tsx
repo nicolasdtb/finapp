@@ -249,14 +249,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ))}
         </div>
       </div>
-
-      {/* Botao Flutuante de Adicionar */}
-      <button 
-        onClick={onNewTransaction}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform"
-      >
-        <Plus className="w-7 h-7" />
-      </button>
     </div>
   );
 };
