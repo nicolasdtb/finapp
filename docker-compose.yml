@@ -49,9 +49,14 @@ services:
     ports:
       - "53:53/udp"
       - "53:53/tcp"
-    environment:
-      - DOMAIN=zt
-    command: ["--address=/finapp.zt/172.23.17.157", "--log-queries"]
+    cap_add:
+      - NET_ADMIN
+    command: >
+      dnsmasq -k
+      --address=/finapp.zt/172.23.17.157
+      --server=1.1.1.1
+      --server=8.8.8.8
+      --log-queries
 
 volumes:
   postgres_data:
