@@ -1,4 +1,4 @@
-﻿import Fastify from "fastify";
+import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyJwt from "@fastify/jwt";
 import { authRoutes } from "./modules/auth/routes.js";
@@ -7,6 +7,7 @@ import { transactionRoutes } from "./modules/transactions/routes.js";
 import { accountRoutes } from "./modules/accounts/routes.js";
 import { categoryRoutes } from "./modules/categories/routes.js";
 import { tagRoutes } from "./modules/tags/routes.js";
+import { budgetRoutes } from "./modules/budgets/routes.js";
 import { initDatabase } from "./database/init.js";
 
 const app = Fastify({ logger: true });
@@ -34,6 +35,7 @@ async function start() {
   await app.register(accountRoutes, { prefix: "/api/v1/accounts" });
   await app.register(categoryRoutes, { prefix: "/api/v1/categories" });
   await app.register(tagRoutes, { prefix: "/api/v1/tags" });
+  await app.register(budgetRoutes, { prefix: "/api/v1/budgets" });
 
   const port = Number(process.env.PORT) || 3001;
   const host = "0.0.0.0";

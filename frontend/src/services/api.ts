@@ -1,4 +1,4 @@
-﻿// @ts-ignore
+// @ts-ignore
 const API_URL = (typeof window !== "undefined" && window.__FINAPP_API_URL__) 
   ? (window as any).__FINAPP_API_URL__ 
   : (import.meta.env.VITE_API_URL || "http://localhost:3001/api/v1");
@@ -42,6 +42,14 @@ export interface Tag {
   id: number;
   name: string;
   color: string;
+}
+
+export interface Budget {
+  id: number;
+  categoryId: number;
+  monthYear: string;
+  targetAmount: string;
+  userId?: number;
 }
 
 export interface TransactionItem {
@@ -187,6 +195,27 @@ export const api = {
       method: "PATCH",
       headers: getAuthHeaders(),
       body: JSON.stringify(updates),
+    });
+    return res.json();
+  },
+
+  // Orçamentos e Metas
+  async getBudgets(): Promise<Budget[]> {
+    const res = await fetch(`${API_URL}/budgets`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+  async saveBudget(data: { categoryId: number; targetAmount: string; monthYear?: string }): Promise<Budget> {
+    const res = await fetch(`${API_URL}/budgets`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  async deleteBudget(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_URL}/budgets/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
     });
     return res.json();
   }

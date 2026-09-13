@@ -2,18 +2,20 @@ import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
 import { Settings } from "./pages/Settings.js";
 import { Reports } from "./pages/Reports.js";
+import { Budgets } from "./pages/Budgets.js";
 import { LoginModal } from "./pages/Login.js";
 import { TransactionModal } from "./components/TransactionModal.js";
-import { api, Account, Category, Tag, Transaction, User } from "./services/api.js";
+import { api, Account, Category, Tag, Transaction, User, Budget } from "./services/api.js";
 import { LogOut, User as UserIcon } from "lucide-react";
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "budgets" | "settings">("dashboard");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal State
@@ -46,16 +48,18 @@ export function App() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [accs, cats, tgs, txs] = await Promise.all([
+      const [accs, cats, tgs, txs, bdgs] = await Promise.all([
         api.getAccounts(),
         api.getCategories(),
         api.getTags(),
-        api.getTransactions()
+        api.getTransactions(),
+        api.getBudgets()
       ]);
       setAccounts(accs);
       setCategories(cats);
       setTags(tgs);
       setTransactions(txs);
+      setBudgets(bdgs);
     } catch (err) {
       console.error("Erro ao carregar dados da API:", err);
     } finally {
@@ -167,6 +171,13 @@ export function App() {
             categories={categories}
             accounts={accounts}
           />
+        ) : currentView === "budgets" ? (
+          <Budgets 
+            transactions={transactions}
+            categories={categories}
+            budgets={budgets}
+            onRefreshBudgets={loadData}
+          />
         ) : (
           <Settings 
             onBack={() => setCurrentView("dashboard")}
@@ -179,26 +190,26 @@ export function App() {
       </main>
 
       {/* Barra de Navegação Inferior Nativa (estilo Minhas Finanças) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/80 px-4 py-2">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/80 px-2 py-2">
         <div className="max-w-md mx-auto flex items-center justify-around">
           <button
             onClick={() => setCurrentView("dashboard")}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition ${
               currentView === "dashboard" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <span className="text-xl">🏠</span>
-            <span className="text-[11px]">Início</span>
+            <span className="text-[10px]">Início</span>
           </button>
 
           <button
             onClick={() => setCurrentView("reports")}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition ${
               currentView === "reports" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <span className="text-xl">📊</span>
-            <span className="text-[11px]">Relatórios</span>
+            <span className="text-[10px]">Relatórios</span>
           </button>
 
           <button
@@ -206,20 +217,30 @@ export function App() {
               setEditingTransaction(null);
               setIsModalOpen(true);
             }}
-            className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full shadow-lg shadow-emerald-500/25 -mt-5 hover:scale-105 active:scale-95 transition"
+            className="flex items-center justify-center w-11 h-11 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-full shadow-lg shadow-emerald-500/25 -mt-4 hover:scale-105 active:scale-95 transition"
             title="Nova Transação"
           >
             <span className="text-2xl font-bold">+</span>
           </button>
 
           <button
+            onClick={() => setCurrentView("budgets")}
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition ${
+              currentView === "budgets" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <span className="text-xl">🎯</span>
+            <span className="text-[10px]">Metas</span>
+          </button>
+
+          <button
             onClick={() => setCurrentView("settings")}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-xl transition ${
               currentView === "settings" ? "text-emerald-400 font-semibold" : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <span className="text-xl">⚙️</span>
-            <span className="text-[11px]">Ajustes</span>
+            <span className="text-[10px]">Ajustes</span>
           </button>
         </div>
       </nav>
