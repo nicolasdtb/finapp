@@ -12,7 +12,7 @@ export async function accountRoutes(app: FastifyInstance) {
   app.post("/", async (request, reply) => {
     const schema = z.object({
       name: z.string().min(1),
-      type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"]),
+      typeId: z.number().default(1), // 1: CHECKING, 2: CREDIT_CARD, 3: SAVINGS, 4: CASH
       balance: z.string().default("0.00"),
       color: z.string().default("#3B82F6"),
       icon: z.string().default("wallet"),
@@ -22,7 +22,17 @@ export async function accountRoutes(app: FastifyInstance) {
     });
 
     const data = schema.parse(request.body);
-    const [created] = await db.insert(accounts).values(data).returning();
+    const [created] = await db.insert(accounts).values({
+      name: data.name,
+      typeId: data.typeId,
+      balance: data.balance,
+      color: data.color,
+      icon: data.icon,
+      creditLimit: data.creditLimit,
+      closingDay: data.closingDay,
+      dueDay: data.dueDay,
+    }).returning();
+
     return reply.status(201).send(created);
   });
 }

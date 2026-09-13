@@ -105,12 +105,32 @@ INSERT INTO recurrence_types (id, code, name) VALUES
   (5, 'ANNUAL', 'Anual'),
   (6, 'INSTALLMENT', 'Parcelada')
 ON CONFLICT (id) DO NOTHING;
+
+-- 4. CONTAS E CATEGORIAS INICIAIS PADRAO SE VAZIO
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM accounts) THEN
+    INSERT INTO accounts (id, name, type_id, balance, color, icon) VALUES
+      ('a0000000-0000-0000-0000-000000000001', 'Nubank (Cartão)', 2, 0.00, '#820AD1', 'credit-card'),
+      ('a0000000-0000-0000-0000-000000000002', 'Banco Inter (Principal)', 1, 3500.00, '#FF7A00', 'wallet'),
+      ('a0000000-0000-0000-0000-000000000003', 'Carteira (Dinheiro)', 4, 120.00, '#10B981', 'banknote');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM categories) THEN
+    INSERT INTO categories (name, type_id, color, icon) VALUES
+      ('Alimentação & Restaurante', 2, '#EF4444', 'utensils'),
+      ('Supermercado', 2, '#F59E0B', 'shopping-cart'),
+      ('Transporte & Combustível', 2, '#3B82F6', 'car'),
+      ('Moradia & Contas', 2, '#8B5CF6', 'home'),
+      ('Salário & Renda', 1, '#10B981', 'dollar-sign');
+  END IF;
+END $$;
 `;
 
 export async function initDatabase() {
   try {
     await pool.query(createTablesSQL);
-    console.log("✅ Banco de dados e tabelas de dicionário inicializados com sucesso!");
+    console.log("✅ Banco de dados, tabelas de dicionário e dados iniciais inicializados com sucesso!");
   } catch (err) {
     console.error("❌ Erro ao inicializar banco:", err);
   }
