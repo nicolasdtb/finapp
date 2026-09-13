@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2, Camera, ShoppingBag } from "lucide-react";
 import { Account, Category, Transaction, TransactionItem } from "../services/api.js";
+import { 
+  formatCentsToBRL, 
+  parseInputToCents, 
+  decimalToCents, 
+  centsToDecimalString,
+  formatQuantity 
+} from "../utils/currency.js";
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -25,7 +32,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const [typeId, setTypeId] = useState<number>(editingTransaction?.typeId || 2); // 1: Receita, 2: Despesa
   const [description, setDescription] = useState(editingTransaction?.description || "");
-  const [amount, setAmount] = useState(editingTransaction?.amount || "");
+  // amountCents armazena o valor em centavos inteiros (ex: 4590 para R$ 45,90)
+  const [amountCents, setAmountCents] = useState<number>(
+    editingTransaction?.amount ? decimalToCents(editingTransaction.amount) : 0
+  );
   const [accountId, setAccountId] = useState<number>(editingTransaction?.accountId || accounts[0]?.id || 1);
   const [categoryId, setCategoryId] = useState<number | undefined>(editingTransaction?.categoryId || categories[0]?.id);
   const [date, setDate] = useState(editingTransaction?.date ? editingTransaction.date.split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -37,17 +47,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState("1");
-  const [itemPrice, setItemPrice] = useState("");
+  const [itemPriceCents, setItemPriceCents] = useState<number>(0);
 
   const handleAddItem = () => {
-    if (!itemName || !itemPrice) return;
-    const qty = parseFloat(itemQty) || 1;
-    const price = parseFloat(itemPrice) || 0;
+    if (!itemName || itemPriceCents <= 0) return;
+    const qty = parseFloat(itemQty.replace(",", ".")) || 1;
+    const price = itemPriceCents / 100;
     const total = (qty * price).toFixed(2);
 
     const newItem: TransactionItem = {
       name: itemName,
-      quantity: itemQty,
+      quantity: formatQuantity(qty),
       unitPrice: price.toFixed(2),
       totalPrice: total,
     };
@@ -56,11 +66,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setItems(newItems);
 
     // Auto-calcula o valor total da transação somando os itens
-    const sum = newItems.reduce((acc, i) => acc + parseFloat(i.totalPrice), 0);
-    setAmount(sum.toFixed(2));
+    const sumCents = newItems.reduce((acc, i) => acc + decimalToCents(i.totalPrice), 0);
+    setAmountCents(sumCents);
 
     setItemName("");
-    setItemPrice("");
+    setItemPriceCents(0);
     setItemQty("1");
   };
 
@@ -68,8 +78,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     const updated = items.filter((_, idx) => idx !== index);
     setItems(updated);
     if (updated.length > 0) {
-      const sum = updated.reduce((acc, i) => acc + parseFloat(i.totalPrice), 0);
-      setAmount(sum.toFixed(2));
+      const sumCents = updated.reduce((acc, i) => acc + decimalToCents(i.totalPrice), 0);
+      setAmountCents(sumCents);
     }
   };
 
@@ -78,7 +88,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (editingTransaction) {
       setTypeId(editingTransaction.typeId);
       setDescription(editingTransaction.description);
-      setAmount(editingTransaction.amount);
+      setAmountCents(decimalToCents(editingTransaction.amount));
       setAccountId(editingTransaction.accountId);
       setCategoryId(editingTransaction.categoryId);
       setDate(editingTransaction.date ? editingTransaction.date.split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -88,7 +98,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     } else {
       setTypeId(2);
       setDescription("");
-      setAmount("");
+      setAmountCents(0);
       setAccountId(accounts[0]?.id || 1);
       setCategoryId(categories[0]?.id);
       setDate(new Date().toISOString().split("T")[0]);
@@ -100,7 +110,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount) return;
+    if (!description || amountCents <= 0) return;
 
     // Envia a data com meio-dia local (12:00:00) para evitar que o UTC recue 1 dia no fuso horário do Brasil (UTC-3)
     const [y, m, d] = date.split("-").map(Number);
@@ -108,7 +118,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
     await onSave({
       description,
-      amount,
+      amount: centsToDecimalString(amountCents),
       typeId,
       statusId: 1,
       date: localDate.toISOString(),
@@ -155,18 +165,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Valor */}
+          {/* Valor Principal com máscara monetária automática */}
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Valor (R$)</label>
             <div className="relative">
               <span className="absolute left-4 top-3.5 text-lg font-bold text-slate-400">R$</span>
               <input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="numeric"
                 required
                 placeholder="0,00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                value={formatCentsToBRL(amountCents)}
+                onChange={(e) => setAmountCents(parseInputToCents(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-2xl font-extrabold text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -252,55 +262,72 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
             {showItems && (
               <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3.5 space-y-3">
-                <div className="grid grid-cols-12 gap-2 items-center">
+                {/* Linha de Inputs do Item com layout mobile amigável e botão de adicionar grande */}
+                <div className="space-y-2">
                   <input
                     type="text"
-                    placeholder="Produto (ex: Arroz 5kg)"
+                    placeholder="Nome do produto (ex: Arroz 5kg)"
                     value={itemName}
                     onChange={(e) => setItemName(e.target.value)}
-                    className="col-span-6 bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500"
                   />
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="Qtd"
-                    value={itemQty}
-                    onChange={(e) => setItemQty(e.target.value)}
-                    className="col-span-2 bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white text-center"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="R$ Un"
-                    value={itemPrice}
-                    onChange={(e) => setItemPrice(e.target.value)}
-                    className="col-span-3 bg-slate-900 border border-slate-800 rounded-lg p-2 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    className="col-span-1 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Qtd</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="1"
+                        value={itemQty}
+                        onChange={(e) => setItemQty(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white text-center font-semibold"
+                      />
+                    </div>
+                    <div className="col-span-5">
+                      <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Preço Unitário</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-2.5 text-[11px] font-bold text-slate-400">R$</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0,00"
+                          value={formatCentsToBRL(itemPriceCents)}
+                          onChange={(e) => setItemPriceCents(parseInputToCents(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2.5 pl-8 pr-2 text-xs text-white font-semibold"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-4 pt-4">
+                      <button
+                        type="button"
+                        onClick={handleAddItem}
+                        className="w-full h-10 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 text-xs transition"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Adicionar</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Lista de Itens Adicionados */}
                 {items.length > 0 && (
-                  <div className="divide-y divide-slate-800 max-h-32 overflow-y-auto">
+                  <div className="divide-y divide-slate-800 max-h-40 overflow-y-auto pt-1">
                     {items.map((it, idx) => (
-                      <div key={idx} className="py-1.5 flex justify-between items-center text-xs">
-                        <span className="text-slate-300 font-medium truncate max-w-[180px]">
-                          {it.quantity}x {it.name}
+                      <div key={idx} className="py-2 flex justify-between items-center text-xs">
+                        <span className="text-slate-200 font-medium truncate max-w-[200px]">
+                          {formatQuantity(it.quantity)}x {it.name}
                         </span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-100">R$ {it.totalPrice}</span>
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-bold text-slate-100">
+                            R$ {parseFloat(it.totalPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="text-rose-400 hover:text-rose-300 p-1"
+                            className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>

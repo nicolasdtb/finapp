@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { 
   Target, 
   AlertTriangle, 
@@ -13,6 +13,7 @@ import {
 import { Transaction, Category, Budget, api } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
+import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
 
 interface BudgetsProps {
   transactions: Transaction[];
@@ -30,7 +31,7 @@ export const Budgets: React.FC<BudgetsProps> = ({
   const [cycleOffset, setCycleOffset] = useState<number>(0);
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(categories[0]?.id || 1);
-  const [targetAmount, setTargetAmount] = useState("");
+  const [targetAmountCents, setTargetAmountCents] = useState<number>(0);
 
   const currentPeriod = useMemo(() => {
     return calculateFinancialPeriods(transactions, categories, cycleOffset);
@@ -113,16 +114,16 @@ export const Budgets: React.FC<BudgetsProps> = ({
   // Salvar nova meta
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCategoryId || !targetAmount) return;
+    if (!selectedCategoryId || targetAmountCents <= 0) return;
 
     try {
       await api.saveBudget({
         categoryId: Number(selectedCategoryId),
-        targetAmount: targetAmount,
+        targetAmount: centsToDecimalString(targetAmountCents),
       });
       await onRefreshBudgets();
       setIsAdding(false);
-      setTargetAmount("");
+      setTargetAmountCents(0);
     } catch (err) {
       alert("Erro ao salvar orçamento.");
     }
@@ -220,15 +221,18 @@ export const Budgets: React.FC<BudgetsProps> = ({
 
             <div>
               <label className="text-[11px] text-slate-400 block mb-1">Limite Máximo (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                placeholder="Ex: 800,00"
-                value={targetAmount}
-                onChange={e => setTargetAmount(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
-              />
+              <div className="relative">
+                <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  placeholder="0,00"
+                  value={formatCentsToBRL(targetAmountCents)}
+                  onChange={e => setTargetAmountCents(parseInputToCents(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-8 pr-2.5 text-xs text-white font-semibold"
+                />
+              </div>
             </div>
           </div>
 

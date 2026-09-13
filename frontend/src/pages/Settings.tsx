@@ -1,6 +1,7 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree } from "lucide-react";
 import { Account, Category, Tag, api } from "../services/api.js";
+import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
 
 interface SettingsProps {
   onBack: () => void;
@@ -22,7 +23,7 @@ export const Settings: React.FC<SettingsProps> = ({
   // Novo Cartão / Conta
   const [newAccName, setNewAccName] = useState("");
   const [newAccType, setNewAccType] = useState<number>(1);
-  const [newAccBalance, setNewAccBalance] = useState("0.00");
+  const [newAccBalanceCents, setNewAccBalanceCents] = useState<number>(0);
   const [newAccColor, setNewAccColor] = useState("#3B82F6");
 
   // Nova Categoria
@@ -40,12 +41,12 @@ export const Settings: React.FC<SettingsProps> = ({
     await api.createAccount({
       name: newAccName,
       typeId: newAccType,
-      balance: newAccBalance,
+      balance: centsToDecimalString(newAccBalanceCents),
       color: newAccColor,
       icon: newAccType === 2 ? "credit-card" : "wallet"
     });
     setNewAccName("");
-    setNewAccBalance("0.00");
+    setNewAccBalanceCents(0);
     await onRefresh();
   };
 
@@ -162,14 +163,17 @@ export const Settings: React.FC<SettingsProps> = ({
                 <option value={3}>Investimento</option>
                 <option value={4}>Dinheiro</option>
               </select>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Saldo Inicial"
-                value={newAccBalance}
-                onChange={(e) => setNewAccBalance(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
-              />
+              <div className="relative">
+                <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0,00"
+                  value={formatCentsToBRL(newAccBalanceCents)}
+                  onChange={(e) => setNewAccBalanceCents(parseInputToCents(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-8 pr-2.5 text-xs text-white"
+                />
+              </div>
             </div>
             <div className="flex justify-between items-center pt-1">
               <div className="flex items-center gap-2">
