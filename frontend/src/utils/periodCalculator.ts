@@ -1,3 +1,5 @@
+﻿import { Category, Transaction } from '../services/api.js';
+
 export interface FinancialPeriod {
   startDate: Date;
   endDate: Date;
@@ -40,23 +42,42 @@ export function formatDayMonthYear(date: Date): string {
   return d + '/' + m + '/' + y;
 }
 
+/**
+ * Verifica se uma transação é de Salário
+ */
+export function isSalaryTransaction(tx: Transaction, categories: Category[]): boolean {
+  if (tx.typeId !== 1) return false; // Deve ser Receita
+
+  // 1. Verifica por categoria "Salário"
+  const cat = categories.find(c => c.id === tx.categoryId);
+  if (cat && cat.name.toLowerCase().includes('sal')) {
+    return true;
+  }
+
+  // 2. Verifica palavras-chave na descrição
+  const desc = (tx.description || '').toLowerCase();
+  const salaryKeywords = ['salario', 'salário', 'pagamento', 'holerite', 'proventos', 'remuneração', 'remuneracao'];
+  return salaryKeywords.some(kw => desc.includes(kw));
+}
+
+/**
+ * Calcula os períodos financeiros considerando o evento do salário
+ */
 export function calculateFinancialPeriods(
-  transactions: { description: string; amount: string; typeId: number; date: string }[],
+  transactions: Transaction[],
+  categories: Category[],
   offsetCycles: number = 0
 ): FinancialPeriod {
   const now = new Date();
 
-  const salaryKeywords = ['salario', 'sal�rio', 'pagamento', 'holerite', 'proventos', 'remunera��o'];
+  // Filtra receitas de salário
   const salaryTxs = transactions
-    .filter(t => t.typeId === 1)
-    .filter(t => {
-      const desc = (t.description || '').toLowerCase();
-      return salaryKeywords.some(kw => desc.includes(kw));
-    })
+    .filter(t => isSalaryTransaction(t, categories))
     .map(t => new Date(t.date))
-    .sort((a, b) => b.getTime() - a.getTime());
+    .sort((a, b) => b.getTime() - a.getTime()); // Mais recente primeiro
 
   if (salaryTxs.length > 0) {
+    // Agrupa salários por mês/ano para evitar duplicatas
     const uniqueSalaryDates: Date[] = [];
     salaryTxs.forEach(d => {
       const exists = uniqueSalaryDates.some(
@@ -69,11 +90,13 @@ export function calculateFinancialPeriods(
     if (targetIdx < uniqueSalaryDates.length) {
       const currentSalary = uniqueSalaryDates[targetIdx];
       let nextSalary: Date;
+
       if (targetIdx > 0) {
         nextSalary = new Date(uniqueSalaryDates[targetIdx - 1]);
         nextSalary.setDate(nextSalary.getDate() - 1);
         nextSalary.setHours(23, 59, 59, 999);
       } else {
+        // Ciclo atual: vai da data do último salário até a estimativa do próximo (5º dia útil do mês seguinte)
         const nextMonth = currentSalary.getMonth() === 11 ? 0 : currentSalary.getMonth() + 1;
         const nextYear = currentSalary.getMonth() === 11 ? currentSalary.getFullYear() + 1 : currentSalary.getFullYear();
         const estNext = getFifthBusinessDay(nextYear, nextMonth);
@@ -95,6 +118,7 @@ export function calculateFinancialPeriods(
     }
   }
 
+  // Fallback: 5º dia útil do mês
   const refDate = new Date(now.getFullYear(), now.getMonth() + offsetCycles, 1);
   const curYear = refDate.getFullYear();
   const curMonth = refDate.getMonth();

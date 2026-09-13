@@ -148,6 +148,7 @@ export function App() {
           <Dashboard 
             transactions={transactions}
             accounts={accounts}
+            categories={categories}
             onNewTransaction={() => {
               setEditingTransaction(null);
               setIsModalOpen(true);

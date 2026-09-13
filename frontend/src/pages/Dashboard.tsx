@@ -16,6 +16,7 @@ import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 interface DashboardProps {
   transactions: Transaction[];
   accounts: Account[];
+  categories: Category[];
   onNewTransaction: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
@@ -25,6 +26,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ 
   transactions, 
   accounts, 
+  categories,
   onNewTransaction, 
   onEditTransaction,
   onConfirmPending,
@@ -35,8 +37,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Calcula o período atual (entre salários ou 5º dia útil)
   const currentPeriod = useMemo(() => {
-    return calculateFinancialPeriods(transactions, cycleOffset);
-  }, [transactions, cycleOffset]);
+    return calculateFinancialPeriods(transactions, categories, cycleOffset);
+  }, [transactions, categories, cycleOffset]);
 
   const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
   const pendingTransactions = transactions.filter(t => t.statusId === 2);
