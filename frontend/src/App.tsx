@@ -1,70 +1,92 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard.js";
 import { api, Account, Transaction } from "./services/api.js";
 
 export function App() {
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: "1", name: "Nubank", typeId: 2, balance: "1420.50", color: "#820AD1", icon: "credit-card" },
-    { id: "2", name: "Banco Inter", typeId: 1, balance: "3850.00", color: "#FF7A00", icon: "wallet" },
-    { id: "3", name: "Carteira Dinheiro", typeId: 4, balance: "180.00", color: "#10B981", icon: "banknote" },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: "101",
-      description: "Supermercado Carrefour",
-      amount: "142.90",
-      typeId: 2,
-      statusId: 2, // Pendente vindo do banco
-      date: new Date().toISOString(),
-      accountId: "1",
-      rawBankNotification: "Compra de R$ 142,90 aprovada no Carrefour"
-    },
-    {
-      id: "102",
-      description: "Salário Empresa",
-      amount: "5200.00",
-      typeId: 1,
-      statusId: 1,
-      date: new Date(Date.now() - 86400000 * 2).toISOString(),
-      accountId: "2"
-    },
-    {
-      id: "103",
-      description: "Posto Shell Combustível",
-      amount: "210.00",
-      typeId: 2,
-      statusId: 1,
-      date: new Date(Date.now() - 86400000 * 4).toISOString(),
-      accountId: "1"
+  // Carrega dados reais da API e cria contas iniciais se o banco estiver vazio
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      let accs = await api.getAccounts();
+      
+      // Se for a primeira vez e nao houver contas, cria contas padrao
+      if (accs.length === 0) {
+        await api.createAccount({
+          name: "Nubank (Cartão)",
+          typeId: 2, // Cartão de Crédito
+          balance: "0.00",
+          color: "#820AD1",
+          icon: "credit-card"
+        });
+        await api.createAccount({
+          name: "Conta Principal",
+          typeId: 1, // Conta Corrente
+          balance: "2500.00",
+          color: "#3B82F6",
+          icon: "wallet"
+        });
+        await api.createAccount({
+          name: "Carteira Dinheiro",
+          typeId: 4, // Dinheiro físico
+          balance: "150.00",
+          color: "#10B981",
+          icon: "banknote"
+        });
+        accs = await api.getAccounts();
+      }
+      setAccounts(accs);
+
+      const txs = await api.getTransactions();
+      setTransactions(txs);
+    } catch (err) {
+      console.error("Erro ao carregar dados da API:", err);
+    } finally {
+      setLoading(false);
     }
-  ]);
-
-  const handleConfirmPending = (tx: Transaction) => {
-    const updated = transactions.map(t => 
-      t.id === tx.id ? { ...t, statusId: 1 } : t
-    );
-    setTransactions(updated);
-    alert(`Transação "${tx.description}" confirmada e consolidada com sucesso!`);
   };
 
-  const handleNewTransaction = () => {
-    const desc = prompt("Descrição do gasto/receita:");
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleConfirmPending = async (tx: Transaction) => {
+    try {
+      await api.confirmTransaction(tx.id, {});
+      await loadData();
+      alert(`Transação "${tx.description}" confirmada e consolidada!`);
+    } catch (err) {
+      alert("Erro ao confirmar transação.");
+    }
+  };
+
+  const handleNewTransaction = async () => {
+    const desc = prompt("Descrição do gasto ou receita:");
     if (!desc) return;
     const amountStr = prompt("Valor (ex: 45.50):");
     if (!amountStr) return;
 
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      description: desc,
-      amount: amountStr,
-      typeId: 2,
-      statusId: 1,
-      date: new Date().toISOString(),
-      accountId: accounts[0].id
-    };
+    if (accounts.length === 0) {
+      alert("Nenhuma conta encontrada para lançar.");
+      return;
+    }
 
-    setTransactions([newTx, ...transactions]);
+    try {
+      await api.createTransaction({
+        description: desc,
+        amount: amountStr,
+        typeId: 2, // Despesa
+        statusId: 1, // Confirmado
+        date: new Date().toISOString(),
+        accountId: accounts[0].id
+      });
+      await loadData();
+    } catch (err) {
+      alert("Erro ao criar transação.");
+    }
   };
 
   return (
@@ -83,12 +105,18 @@ export function App() {
       </header>
 
       <main className="flex-1 w-full">
-        <Dashboard 
-          transactions={transactions}
-          accounts={accounts}
-          onNewTransaction={handleNewTransaction}
-          onConfirmPending={handleConfirmPending}
-        />
+        {loading ? (
+          <div className="flex items-center justify-center p-12 text-slate-400 text-sm">
+            Sincronizando dados com o servidor...
+          </div>
+        ) : (
+          <Dashboard 
+            transactions={transactions}
+            accounts={accounts}
+            onNewTransaction={handleNewTransaction}
+            onConfirmPending={handleConfirmPending}
+          />
+        )}
       </main>
     </div>
   );

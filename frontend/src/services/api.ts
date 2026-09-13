@@ -1,4 +1,7 @@
-﻿const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api/v1";
+﻿// @ts-ignore
+const API_URL = (typeof window !== "undefined" && window.__FINAPP_API_URL__) 
+  ? (window as any).__FINAPP_API_URL__ 
+  : (import.meta.env.VITE_API_URL || "http://localhost:3001/api/v1");
 
 export interface Account {
   id: string;
@@ -36,10 +39,33 @@ export interface Transaction {
 export const api = {
   async getAccounts(): Promise<Account[]> {
     const res = await fetch(`${API_URL}/accounts`);
+    if (!res.ok) throw new Error("Erro ao carregar contas");
+    return res.json();
+  },
+  async createAccount(data: Partial<Account>): Promise<Account> {
+    const res = await fetch(`${API_URL}/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  async getCategories(): Promise<Category[]> {
+    const res = await fetch(`${API_URL}/categories`);
+    if (!res.ok) throw new Error("Erro ao carregar categorias");
+    return res.json();
+  },
+  async createCategory(data: Partial<Category>): Promise<Category> {
+    const res = await fetch(`${API_URL}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
     return res.json();
   },
   async getTransactions(): Promise<Transaction[]> {
     const res = await fetch(`${API_URL}/transactions`);
+    if (!res.ok) throw new Error("Erro ao carregar transações");
     return res.json();
   },
   async createTransaction(data: Partial<Transaction>): Promise<Transaction> {
