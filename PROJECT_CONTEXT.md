@@ -8,39 +8,50 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
 
 ## 2. Principios de Arquitetura & Stack
 - **Monorepo Simples e Limpo**:
-  - `backend/`: API REST em Node.js (TypeScript) com Fastify / Express e Drizzle ORM / Prisma.
+  - `backend/`: API REST em Node.js (TypeScript) com Fastify / Express e Drizzle ORM.
   - `frontend/`: Interface Web responsiva PWA (React + Tailwind CSS / Lucide Icons).
   - `docker/`: Configuracoes de conteineres e orquestracao.
 - **Banco de Dados**: PostgreSQL (executando via Docker na VM Linux).
 - **Rede e Acesso**: ZeroTier VPN (comunicacao segura entre Celular Android, Computador e VM Linux).
-- **Captura de Gastos Bancarios**:
-  - Webhook endpoint `/api/v1/webhooks/bank-notification` que recebe payloads de apps de automacao (ex: MacroDroid, Tasker ou micro-app) e extrai com Regex o valor, cartao/conta e estabelecimento para pre-aprovacao de despesa.
-  - Suporte a importacao manual de extratos OFX / CSV.
+- **Acesso para Analise / Suporte**: Acessivel diretamente via DBeaver usando o IP do ZeroTier da VM na porta 5432.
 
 ---
 
-## 3. Modelo de Dados Principal (Entidades)
-1. **Accounts (Contas/Cartoes)**:
-   - `id`, `name` (ex: NuConta, Inter, Dinheiro), `type` (CHECKING, SAVINGS, CREDIT_CARD, CASH), `balance`, `color`, `icon`, `created_at`.
-   - Se for cartao de credito: `limit`, `closing_day`, `due_day`.
-2. **Categories (Categorias & Subcategorias)**:
-   - `id`, `name` (ex: Alimentacao, Moradia, Transporte, Salario), `type` (INCOME, EXPENSE), `icon`, `color`, `parent_id` (para subcategorias).
-3. **Transactions (Lancamentos)**:
-   - `id`, `description`, `amount`, `type` (INCOME, EXPENSE, TRANSFER), `date`, `category_id`, `account_id`, `destination_account_id` (se for transferencia).
-   - `status` (CONFIRMED, PENDING_CONFIRMATION - para gastos vindos de notificacoes bancarias).
-   - `recurrence` (NONE, DAILY, WEEKLY, MONTHLY, ANNUAL, INSTALLMENTS).
-   - `installment_number`, `total_installments` (para compras parceladas).
-4. **Budgets (Orcamentos por Categoria / Mensal)**:
+## 3. REGRA OBRIGATORIA DE BANCO DE DADOS: Tabelas de Dicionario / ENUMs Tabulares
+> **IMPORTANTE PARA A IA**: Qualquer campo de status, tipo, categoria de sistema ou discriminador numerico/codigo DEVE possuir uma tabela de lookup dedicada (tabela de dicionario/enum) contendo `id` (inteiro) e `description`/`name` (texto legivel), com Foreign Key apontando para ela.
+>
+> **Exemplo:** Em vez de guardar apenas `type: 1` ou um enum solto na aplicacao:
+> - Tabela `account_types` (`id: 1, code: 'CHECKING', name: 'Conta Corrente'`, `id: 2, code: 'CREDIT_CARD', name: 'Cartao de Credito'`)
+> - Tabela `transaction_types` (`id: 1, code: 'INCOME', name: 'Receita'`, `id: 2, code: 'EXPENSE', name: 'Despesa'`)
+> - Tabela `transaction_statuses` (`id: 1, code: 'CONFIRMED', name: 'Confirmado'`, `id: 2, code: 'PENDING_CONFIRMATION', name: 'Pendente'`)
+>
+> Isso garante total clareza, integridade referencial e legibilidade imediata ao consultar o banco via DBeaver, BI ou SQL puro.
+
+---
+
+## 4. Modelo de Dados Principal (Entidades)
+1. **Lookup Tables (Tabelas de Dominio / Enum)**:
+   - `account_types`: id, code, name
+   - `transaction_types`: id, code, name
+   - `transaction_statuses`: id, code, name
+   - `recurrence_types`: id, code, name
+2. **Accounts (Contas/Cartoes)**:
+   - `id`, `name`, `type_id` (FK account_types), `balance`, `color`, `icon`, `credit_limit`, `closing_day`, `due_day`.
+3. **Categories (Categorias & Subcategorias)**:
+   - `id`, `name`, `type_id` (FK transaction_types), `color`, `icon`, `parent_id`.
+4. **Transactions (Lancamentos)**:
+   - `id`, `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`.
+5. **Budgets (Orcamentos)**:
    - `id`, `category_id`, `month_year`, `target_amount`.
 
 ---
 
-## 4. Estrutura de Pastas
+## 5. Estrutura de Pastas
 ```text
 finapp/
-+-- PROJECT_CONTEXT.md          # Este arquivo (Manual de bordo da IA)
-+-- docker-compose.yml          # Subida rapida de PostgreSQL, Backend e Frontend na VM
-+-- .gitignore
-+-- backend/                    # API e Regras de Negocio
++-- PROJECT_CONTEXT.md          # Manual de bordo e regras de ouro para IA
++-- docker-compose.yml          # Postgres (porta 5432 exposta para DBeaver), Backend e Frontend
++-- backend/                    # Fastify + Drizzle ORM
 +-- frontend/                   # Interface PWA Responsiva
-+-- docs/                       # Guias e diagramas
++-- docs/                       # Guias (zerotier, dbeaver, notificacoes)
+```
