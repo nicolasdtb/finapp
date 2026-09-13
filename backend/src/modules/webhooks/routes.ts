@@ -7,46 +7,66 @@ import { eq, isNull, and } from "drizzle-orm";
 export function parseBankNotification(appName: string, text: string) {
   let amount: number | null = null;
   let establishment: string = "Despesa Bancária";
+  let typeId: number = 2; // 1 = Receita (Income), 2 = Despesa (Expense)
 
-  // 1. Extração do valor monetário (R$ 12,34 ou R$ 1.234,56 ou 12,34)
-  const amountMatch = text.match(/R\$\s?([\d\.,]+)/i) || text.match(/(?:valor de|total de|pagou)\s+([\d\.,]+)/i);
+  const lowerText = text.toLowerCase();
+
+  // 1. Detecta se é RECEITA (Pix recebido, transferência recebida, depósito, reembolso)
+  const isIncome = lowerText.includes("recebeu") || 
+                   lowerText.includes("recebida") || 
+                   lowerText.includes("depósito") || 
+                   lowerText.includes("deposito") || 
+                   lowerText.includes("reembolso");
+
+  if (isIncome) {
+    typeId = 1;
+    establishment = "Pix / Transferência Recebida";
+  }
+
+  // 2. Extração do valor monetário (R$ 12,34 ou R$ 0,01)
+  const amountMatch = text.match(/R\$\s?([\d\.,]+)/i) || text.match(/(?:valor de|total de|pagou|recebeu)\s+([\d\.,]+)/i);
   if (amountMatch && amountMatch[1]) {
     const rawVal = amountMatch[1].replace(/\./g, "").replace(",", ".");
     amount = parseFloat(rawVal);
   }
 
-  // 2. Extração inteligente do estabelecimento / beneficiário
-  // Padrão A: Pix para Fulano ("transferiu R$ 50 para Fulano da Silva", "Pix enviado para...")
-  const pixMatch = text.match(/(?:para|destinat[aá]rio)\s+([^,\.]+?)(?:\s+(?:pelo|via|com|no valor)|\.|$)/i);
-  
-  // Padrão B: Compra em Estabelecimento ("Compra de R$ 30 aprovada em Supermercado Bom Preço", "no Uber", "na Drogaria São Paulo")
-  const estabMatch = text.match(/(?:em|no|na)\s+([^,\.]+?)(?:\s+(?:aprovad[oa]|por aproxima[cç][aã]o|com|no valor)|\.|$)/i);
-
-  // Padrão C: Compra aprovada no Estabelecimento
-  const directMatch = text.match(/compra\s+(?:de\s+R\$\s*[\d\.,]+\s+)?(?:aprovada\s+)?(?:em|no|na)\s+([^,\.]+?)(?:\.|$)/i);
-
-  if (pixMatch && pixMatch[1] && (text.toLowerCase().includes("transfer") || text.toLowerCase().includes("pix"))) {
-    establishment = `Pix: ${pixMatch[1].trim()}`;
-  } else if (directMatch && directMatch[1]) {
-    establishment = directMatch[1].trim();
-  } else if (estabMatch && estabMatch[1]) {
-    establishment = estabMatch[1].trim();
+  // 3. Extração inteligente do remetente / estabelecimento
+  if (isIncome) {
+    // "Você recebeu uma transferência de R$ 50,00 de Fulano de Tal" ou "de Maria"
+    const senderMatch = text.match(/(?:de|remetente)\s+([^,\.]+?)(?:\s+(?:pelo|via|com|no valor)|\.|$)/i);
+    if (senderMatch && senderMatch[1]) {
+      establishment = `Pix Recebido: ${senderMatch[1].trim()}`;
+    }
   } else {
-    // Fallback: se não achar preposição, limpa frases conhecidas
-    const cleaned = text
-      .replace(/R\$\s?[\d\.,]+/gi, "")
-      .replace(/compra aprovada/gi, "")
-      .replace(/por aproximação/gi, "")
-      .replace(/você pagou/gi, "")
-      .trim();
-    if (cleaned.length > 3) {
-      establishment = cleaned.split(".")[0].trim();
+    // Pix enviado para Fulano
+    const pixMatch = text.match(/(?:para|destinat[aá]rio)\s+([^,\.]+?)(?:\s+(?:pelo|via|com|no valor)|\.|$)/i);
+    // Compra em Estabelecimento
+    const estabMatch = text.match(/(?:em|no|na)\s+([^,\.]+?)(?:\s+(?:aprovad[oa]|por aproxima[cç][aã]o|com|no valor)|\.|$)/i);
+    const directMatch = text.match(/compra\s+(?:de\s+R\$\s*[\d\.,]+\s+)?(?:aprovada\s+)?(?:em|no|na)\s+([^,\.]+?)(?:\.|$)/i);
+
+    if (pixMatch && pixMatch[1] && (lowerText.includes("transfer") || lowerText.includes("pix"))) {
+      establishment = `Pix: ${pixMatch[1].trim()}`;
+    } else if (directMatch && directMatch[1]) {
+      establishment = directMatch[1].trim();
+    } else if (estabMatch && estabMatch[1]) {
+      establishment = estabMatch[1].trim();
+    } else {
+      const cleaned = text
+        .replace(/R\$\s?[\d\.,]+/gi, "")
+        .replace(/compra aprovada/gi, "")
+        .replace(/por aproximação/gi, "")
+        .replace(/você pagou/gi, "")
+        .trim();
+      if (cleaned.length > 3) {
+        establishment = cleaned.split(".")[0].trim();
+      }
     }
   }
 
   return {
     amount,
     establishment,
+    typeId,
     originalText: text,
     bankHint: appName
   };
@@ -119,8 +139,8 @@ export async function webhookRoutes(app: FastifyInstance) {
     const [newTx] = await db.insert(transactions).values({
       description: parsed.establishment,
       amount: parsed.amount.toFixed(2),
-      typeId: 2,     // 2 = EXPENSE
-      statusId: 2,   // 2 = PENDING_CONFIRMATION
+      typeId: parsed.typeId, // 1 = RECEITA (Pix recebido), 2 = DESPESA (Compra/Pix enviado)
+      statusId: 2,           // 2 = PENDING_CONFIRMATION
       date: new Date(),
       accountId: matchedAccount.id,
       userId: userId,
