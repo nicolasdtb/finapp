@@ -14,6 +14,9 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
 - **Banco de Dados**: PostgreSQL (executando via Docker na VM Linux).
 - **Rede e Acesso**: ZeroTier VPN (comunicacao segura entre Celular Android, Computador e VM Linux).
 - **Acesso para Analise / Suporte**: Acessivel diretamente via DBeaver usando o IP do ZeroTier da VM na porta 5432.
+- **Autenticacao & Multi-usuario (ate 3 usuarios)**:
+  - Sistema de Login (JWT / Sessao) com tabela `users`.
+  - Suporte a contas compartilhadas entre a familia/parceiro(a) ou dados segregados por `user_id`.
 
 ---
 
@@ -30,28 +33,32 @@ Hospedado em VM Linux propria acessivel de forma segura via **ZeroTier**, com su
 ---
 
 ## 4. Modelo de Dados Principal (Entidades)
-1. **Lookup Tables (Tabelas de Dominio / Enum)**:
+1. **Users (Multi-usuario)**:
+   - `id`, `name`, `email`, `password_hash`, `created_at`.
+2. **Lookup Tables (Tabelas de Dominio / Enum)**:
    - `account_types`: id, code, name
    - `transaction_types`: id, code, name
    - `transaction_statuses`: id, code, name
    - `recurrence_types`: id, code, name
-2. **Accounts (Contas/Cartoes)**:
-   - `id`, `name`, `type_id` (FK account_types), `balance`, `color`, `icon`, `credit_limit`, `closing_day`, `due_day`.
-3. **Categories (Categorias & Subcategorias)**:
-   - `id`, `name`, `type_id` (FK transaction_types), `color`, `icon`, `parent_id`.
-4. **Transactions (Lancamentos)**:
-   - `id`, `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`.
-5. **Budgets (Orcamentos)**:
-   - `id`, `category_id`, `month_year`, `target_amount`.
+3. **Accounts (Contas/Cartoes)**:
+   - `id`, `name`, `type_id` (FK account_types), `balance`, `color`, `icon`, `credit_limit`, `closing_day`, `due_day`, `user_id` (FK users).
+4. **Categories (Categorias & Subcategorias)**:
+   - `id`, `name`, `type_id` (FK transaction_types), `color`, `icon`, `parent_id`, `user_id` (FK users).
+5. **Tags (Etiquetas/Marcadores)**:
+   - `id`, `name`, `color`, `user_id` (FK users).
+6. **Transactions (Lancamentos)**:
+   - `id`, `description`, `amount`, `type_id` (FK transaction_types), `status_id` (FK transaction_statuses), `date`, `account_id`, `destination_account_id`, `category_id`, `recurrence_id`, `installment_number`, `total_installments`, `user_id` (FK users).
+7. **Budgets (Orcamentos)**:
+   - `id`, `category_id`, `month_year`, `target_amount`, `user_id` (FK users).
 
 ---
 
-## 5. Estrutura de Pastas
-```text
-finapp/
-+-- PROJECT_CONTEXT.md          # Manual de bordo e regras de ouro para IA
-+-- docker-compose.yml          # Postgres (porta 5432 exposta para DBeaver), Backend e Frontend
-+-- backend/                    # Fastify + Drizzle ORM
-+-- frontend/                   # Interface PWA Responsiva
-+-- docs/                       # Guias (zerotier, dbeaver, notificacoes)
-```
+## 5. Requisitos Funcionais Futuros (Backlog de Fases)
+1. **CRUD Completo de Gestao Financeira**:
+   - Modal/Tela completa de edicao e remocao de transacoes (com atualizacao de saldo da conta).
+   - Gerenciamento de Contas e Cartoes (criar, editar limite/datas, arquivar).
+   - Gerenciamento de Categorias e Tags personalizadas com seletor de cor e icone.
+   - Opcoes completas para Entradas (Receitas), Saidas (Despesas) e Transferencias.
+2. **Autenticacao & Compartilhamento**:
+   - Tela de Login / Cadastro simples e segura (com hash bcrypt e token JWT).
+   - Permitir que ate 3 usuarios cadastrados possam compartilhar a mesma carteira ou ter espacos separados.
