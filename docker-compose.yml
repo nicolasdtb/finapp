@@ -42,5 +42,16 @@ services:
     depends_on:
       - backend
 
+  dns:
+    image: 4km3/dnsmasq:2.85-r2
+    container_name: finapp_dns
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    environment:
+      - DOMAIN=zt
+    command: ["--address=/finapp.zt/172.23.17.157", "--log-queries"]
+
 volumes:
   postgres_data:
