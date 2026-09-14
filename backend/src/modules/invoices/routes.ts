@@ -76,6 +76,17 @@ export async function invoiceRoutes(app: FastifyInstance) {
         }
       }
 
+      // Helper: extrai o último número de um texto com rótulo (ex: "Qtde.:1" → "1", "Vl. Unit.: 16" → "16")
+      // Evita o bug onde o ponto em "Qtde." ou "Vl. Unit." era mantido pelo regex [^\d.,]
+      const extractLastNumber = (text: string): string => {
+        const match = text.match(/(\d+(?:[,.]\d+)?)\s*$/);
+        if (match) return match[1].replace(",", ".");
+        // fallback: qualquer sequência de dígitos com separador decimal opcional
+        const fallback = text.match(/(\d+(?:[,.]\d+)?)/g);
+        if (fallback) return fallback[fallback.length - 1].replace(",", ".");
+        return "";
+      };
+
       // 2. Extração dos Itens da Nota
       const items: ParsedInvoiceItem[] = [];
 
@@ -91,9 +102,9 @@ export async function invoiceRoutes(app: FastifyInstance) {
           const totalText = row.find(".valor, .RvalBruto, td[class*='valor']").text().trim();
 
           if (name && (totalText || unitPriceText)) {
-            const cleanQty = qtyText.replace(/[^\d.,]/g, "").replace(",", ".") || "1";
-            const cleanUnitPrice = unitPriceText.replace(/[^\d.,]/g, "").replace(",", ".") || "0";
-            const cleanTotal = totalText.replace(/[^\d.,]/g, "").replace(",", ".") || cleanUnitPrice;
+            const cleanQty = extractLastNumber(qtyText) || "1";
+            const cleanUnitPrice = extractLastNumber(unitPriceText) || "0";
+            const cleanTotal = extractLastNumber(totalText) || cleanUnitPrice;
 
             items.push({
               name: name.replace(/\s+/g, " "),
@@ -132,10 +143,13 @@ export async function invoiceRoutes(app: FastifyInstance) {
       }
 
       // 3. Valor Total da Nota
+      // Usa .txtMax diretamente para não capturar o texto completo do div pai #totalNota
       let totalAmount = "0.00";
-      const totalEl = $(".txtMax, .totalNFe, span[class*='total'], #totalNota").first().text().trim();
+      const totalEl = $(".txtMax").first().text().trim()
+        || $(".totalNFe").first().text().trim()
+        || $("span[class*='total']").first().text().trim();
       if (totalEl) {
-        const clean = totalEl.replace(/[^\d.,]/g, "").replace(",", ".");
+        const clean = extractLastNumber(totalEl);
         const parsedNum = parseFloat(clean);
         if (!isNaN(parsedNum) && parsedNum > 0) {
           totalAmount = parsedNum.toFixed(2);
