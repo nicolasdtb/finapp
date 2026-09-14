@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { 
   X, 
   UploadCloud, 
@@ -44,6 +44,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [items, setItems] = useState<SelectableItem[]>([]);
   const [filterType, setFilterType] = useState<"all" | "new" | "duplicate">("all");
 
+  // Garante que o ID da conta seja sempre sincronizado quando as contas carregarem ou o modal abrir
+  React.useEffect(() => {
+    if (accounts.length > 0 && (!selectedAccountId || !accounts.some(a => a.id === selectedAccountId))) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accounts, isOpen]);
+
   if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,14 +73,15 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       alert("Por favor selecione um arquivo de extrato válido.");
       return;
     }
-    if (!selectedAccountId) {
+    const targetAccountId = selectedAccountId || accounts[0]?.id;
+    if (!targetAccountId) {
       alert("Por favor selecione a conta de destino.");
       return;
     }
 
     try {
       setLoading(true);
-      const res = await api.parseStatement(selectedAccountId, fileContent, fileName);
+      const res = await api.parseStatement(targetAccountId, fileContent, fileName);
       if (!res.success || !res.data) {
         alert(res.message || "Erro ao processar arquivo de extrato.");
         return;
@@ -125,7 +133,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         externalId: it.externalId
       }));
 
-      const res = await api.confirmImportStatement(selectedAccountId, payload);
+      const targetAccountId = selectedAccountId || accounts[0]?.id;
+      const res = await api.confirmImportStatement(targetAccountId, payload);
       if (res.success) {
         alert(res.message || "Importação concluída com sucesso!");
         onImportSuccess();
