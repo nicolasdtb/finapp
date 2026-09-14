@@ -6,7 +6,8 @@ import {
   parseInputToCents, 
   decimalToCents, 
   centsToDecimalString,
-  formatQuantity 
+  formatQuantity,
+  getTodayLocalDateString
 } from "../utils/currency.js";
 import { QrScannerModal } from "./QrScannerModal.js";
 
@@ -39,7 +40,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   );
   const [accountId, setAccountId] = useState<number>(editingTransaction?.accountId || accounts[0]?.id || 1);
   const [categoryId, setCategoryId] = useState<number | undefined>(editingTransaction?.categoryId || categories[0]?.id);
-  const [date, setDate] = useState(editingTransaction?.date ? editingTransaction.date.split("T")[0] : new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(
+    editingTransaction?.date 
+      ? getTodayLocalDateString(new Date(editingTransaction.date)) 
+      : getTodayLocalDateString()
+  );
   const [notes, setNotes] = useState(editingTransaction?.notes || "");
 
   // Detalhamento de Itens da Compra (Supermercado / Nota Fiscal)
@@ -132,7 +137,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmountCents(decimalToCents(editingTransaction.amount));
       setAccountId(editingTransaction.accountId);
       setCategoryId(editingTransaction.categoryId);
-      setDate(editingTransaction.date ? editingTransaction.date.split("T")[0] : new Date().toISOString().split("T")[0]);
+      setDate(
+        editingTransaction.date 
+          ? getTodayLocalDateString(new Date(editingTransaction.date)) 
+          : getTodayLocalDateString()
+      );
       setNotes(editingTransaction.notes || "");
       setShowItems(Boolean(editingTransaction.items && editingTransaction.items.length > 0));
       setItems(editingTransaction.items || []);
@@ -142,7 +151,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmountCents(0);
       setAccountId(accounts[0]?.id || 1);
       setCategoryId(categories[0]?.id);
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(getTodayLocalDateString());
       setNotes("");
       setShowItems(false);
       setItems([]);
