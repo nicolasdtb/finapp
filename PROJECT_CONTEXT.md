@@ -81,9 +81,27 @@ O esquema completo e documentado coluna por coluna esta disponivel em:
 
 ---
 
-### 🚀 PROXIMOS PASSOS:
-1. **Fase 3: Leitura de Nota Fiscal (QR Code / NFC-e)**:
-   - Scanner de camera no PWA com suporte a HTTPS para ler QR Code de notas de supermercado.
-   - Parser de itens da SEFAZ para preenchimento automatico do modal de transacao com itens detalhados.
-2. **Importador de Extrato Bancario (OFX / CSV)**:
-   - Upload de extratos do banco com deteccao inteligente de duplicidade e auto-categorizacao.
+### ✅ FASE 3 - Leitura de Nota Fiscal (QR Code / NFC-e) Concluida:
+- [x] Scanner de camera no PWA com suporte a HTTPS para ler QR Code de notas de compra.
+- [x] Parser de itens da SEFAZ para preenchimento automatico de supermercados com itens detalhados.
+- [x] Correcao de extracao numerica de quantidades e precos com sanitizacao de rotulos.
+
+---
+
+### ✅ FASE 5 - Importador de Extrato Bancario (OFX / CSV) Concluida:
+- [x] Upload de extratos do banco (.csv e .ofx) com preview e selecao de conta.
+- [x] Sanitizacao automatica de Mojibake / encoding corrompido (DescriÃ§Ã£o -> Descricao).
+- [x] Deteccao inteligente de duplicidade por Identificador unico (UUID / FITID) e Data + Valor.
+- [x] Auto-categorizacao por palavras-chave conhecidas (Uber, mercados, farmacias, ifood).
+- [x] Atualizacao atomica em lote no banco e ajuste consolidado de saldo com cast ::numeric.
+- [x] Correcao de timezone (America/Sao_Paulo) e ajuste manual de saldo em Ajustes > Contas.
+
+---
+
+### 🚀 PROXIMOS PASSOS POTENCIAIS (Backlog / Melhorias Futuras):
+1. **Exportacao de Dados (Backup)**:
+   - Botao para exportar todas as transacoes cadastradas para CSV / Excel.
+2. **Parcelamento de Compras (Recorrencia / Faturas de Cartao)**:
+   - Gerador de parcelas automaticas para compras no cartao de credito (ex: 3x de R$ 100).
+3. **App PWA Offline Cache (Service Worker)**:
+   - Cache de assets estaticos para abertura instantanea em modo aviao.
