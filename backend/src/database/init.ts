@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   installment_number INTEGER,
   total_installments INTEGER,
   raw_bank_notification TEXT,
+  import_id TEXT,
   notes TEXT,
   user_id INTEGER REFERENCES users(id),
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -162,6 +163,10 @@ ON CONFLICT (id) DO NOTHING;
 export async function initDatabase() {
   try {
     await pool.query(createTablesSQL);
+    // Migração defensiva: adiciona coluna import_id se não existir
+    await pool.query(`
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS import_id TEXT;
+    `);
     console.log("✅ Banco de dados e tabela de usuários inicializados com sucesso!");
   } catch (err) {
     console.error("❌ Erro ao inicializar banco:", err);

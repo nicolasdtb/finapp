@@ -99,6 +99,7 @@ export const transactions = pgTable("transactions", {
   totalInstallments: integer("total_installments"),
 
   rawBankNotification: text("raw_bank_notification"),
+  importId: text("import_id"),
   notes: text("notes"),
   userId: integer("user_id").references(() => users.id), // Quem lançou
 

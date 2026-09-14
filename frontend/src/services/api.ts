@@ -228,8 +228,53 @@ export const api = {
       body: JSON.stringify({ url }),
     });
     return res.json();
+  },
+
+  // Importação de Extrato Bancário (CSV / OFX)
+  async parseStatement(accountId: number, fileContent: string, fileName?: string): Promise<{ success: boolean; data?: StatementParseResult; message?: string }> {
+    const res = await fetch(`${API_URL}/import/parse`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ accountId, fileContent, fileName }),
+    });
+    return res.json();
+  },
+
+  async confirmImportStatement(accountId: number, items: Array<{
+    date: string;
+    description: string;
+    amount: string;
+    typeId: number;
+    categoryId?: number | null;
+    externalId?: string;
+  }>): Promise<{ success: boolean; message?: string; importedCount?: number }> {
+    const res = await fetch(`${API_URL}/import/confirm`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ accountId, items }),
+    });
+    return res.json();
   }
 };
+
+export interface StatementItem {
+  externalId: string;
+  date: string;
+  description: string;
+  originalDescription: string;
+  amount: string;
+  typeId: 1 | 2;
+  suggestedCategoryId: number | null;
+  isDuplicate: boolean;
+  duplicateReason?: string;
+}
+
+export interface StatementParseResult {
+  totalFound: number;
+  newItemsCount: number;
+  duplicatesCount: number;
+  items: StatementItem[];
+}
 
 export interface ParsedInvoiceResult {
   storeName: string;

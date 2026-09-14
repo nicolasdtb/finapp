@@ -7,9 +7,10 @@ import {
   Clock, 
   CreditCard,
   Settings,
-  Receipt
+  Receipt,
+  UploadCloud
 } from "lucide-react";
-import { Transaction, Account } from "../services/api.js";
+import { Transaction, Account, Category } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 
@@ -21,6 +22,7 @@ interface DashboardProps {
   onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
   onOpenSettings: () => void;
+  onOpenImport: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
@@ -30,7 +32,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNewTransaction, 
   onEditTransaction,
   onConfirmPending,
-  onOpenSettings
+  onOpenSettings,
+  onOpenImport
 }) => {
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const [cycleOffset, setCycleOffset] = useState<number>(0);
@@ -112,6 +115,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo Consolidado</span>
           <div className="flex items-center gap-2">
+            <button 
+              onClick={onOpenImport}
+              className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-emerald-400 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold"
+              title="Importar Extrato Bancário (CSV / OFX)"
+            >
+              <UploadCloud className="w-4 h-4 text-emerald-400" />
+              <span className="hidden sm:inline">Importar</span>
+            </button>
             <button 
               onClick={onOpenSettings}
               className="p-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl transition"

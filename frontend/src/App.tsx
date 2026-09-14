@@ -5,6 +5,7 @@ import { Reports } from "./pages/Reports.js";
 import { Budgets } from "./pages/Budgets.js";
 import { LoginModal } from "./pages/Login.js";
 import { TransactionModal } from "./components/TransactionModal.js";
+import { ImportModal } from "./components/ImportModal.js";
 import { api, Account, Category, Tag, Transaction, User, Budget } from "./services/api.js";
 import { LogOut, User as UserIcon } from "lucide-react";
 
@@ -20,6 +21,7 @@ export function App() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   // Verifica se o usuário já está autenticado via token salvo
@@ -164,6 +166,7 @@ export function App() {
             }}
             onConfirmPending={handleConfirmPending}
             onOpenSettings={() => setCurrentView("settings")}
+            onOpenImport={() => setIsImportOpen(true)}
           />
         ) : currentView === "reports" ? (
           <Reports 
@@ -257,6 +260,15 @@ export function App() {
         accounts={accounts}
         categories={categories}
         editingTransaction={editingTransaction}
+      />
+
+      {/* Modal de Importação de Extrato Bancário (CSV / OFX) */}
+      <ImportModal 
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        accounts={accounts}
+        categories={categories}
+        onImportSuccess={loadData}
       />
     </div>
   );

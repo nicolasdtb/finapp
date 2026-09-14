@@ -9,6 +9,7 @@ import { categoryRoutes } from "./modules/categories/routes.js";
 import { tagRoutes } from "./modules/tags/routes.js";
 import { budgetRoutes } from "./modules/budgets/routes.js";
 import { invoiceRoutes } from "./modules/invoices/routes.js";
+import { importRoutes } from "./modules/import/routes.js";
 import { initDatabase } from "./database/init.js";
 
 const app = Fastify({ logger: true });
@@ -38,6 +39,7 @@ async function start() {
   await app.register(tagRoutes, { prefix: "/api/v1/tags" });
   await app.register(budgetRoutes, { prefix: "/api/v1/budgets" });
   await app.register(invoiceRoutes, { prefix: "/api/v1/invoices" });
+  await app.register(importRoutes, { prefix: "/api/v1/import" });
 
   const port = Number(process.env.PORT) || 3001;
   const host = "0.0.0.0";
