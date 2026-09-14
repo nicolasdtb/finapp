@@ -207,12 +207,30 @@ export const Settings: React.FC<SettingsProps> = ({
                     <p className="text-xs text-slate-400">R$ {parseFloat(acc.balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteAccount(acc.id)}
-                  className="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const newBal = prompt(`Ajustar saldo de "${acc.name}" (R$):`, parseFloat(acc.balance).toFixed(2));
+                      if (newBal !== null && newBal !== "") {
+                        const clean = newBal.replace(",", ".");
+                        if (!isNaN(parseFloat(clean))) {
+                          api.updateAccount(acc.id, { balance: parseFloat(clean).toFixed(2) }).then(onRefresh);
+                        }
+                      }
+                    }}
+                    title="Ajustar saldo da conta"
+                    className="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 rounded-lg transition"
+                  >
+                    Ajustar Saldo
+                  </button>
+                  <button
+                    onClick={() => handleDeleteAccount(acc.id)}
+                    className="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
+                    title="Excluir conta"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

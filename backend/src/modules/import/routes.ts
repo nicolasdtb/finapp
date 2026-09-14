@@ -1,4 +1,4 @@
-﻿import { FastifyInstance } from "fastify";
+import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, accounts, categories } from "../../database/schema.js";
@@ -330,12 +330,14 @@ export async function importRoutes(app: FastifyInstance) {
           balanceDelta -= amountNum;
         }
 
+        const parsedDate = item.date.includes("T") ? new Date(item.date) : new Date(`${item.date}T12:00:00`);
+
         await tx.insert(transactions).values({
           description: item.description,
           amount: item.amount,
           typeId: item.typeId,
           statusId: 1, // CONFIRMED
-          date: new Date(item.date),
+          date: parsedDate,
           accountId: accountId,
           categoryId: item.categoryId || null,
           importId: item.externalId || null,
@@ -344,9 +346,11 @@ export async function importRoutes(app: FastifyInstance) {
         });
       }
 
+      // Atualiza o saldo somando o delta arredondado em 2 casas
+      const fixedDelta = parseFloat(balanceDelta.toFixed(2));
       await tx.update(accounts)
         .set({
-          balance: sql`${accounts.balance} + ${balanceDelta}`,
+          balance: sql`${accounts.balance} + ${fixedDelta}::numeric`,
           updatedAt: new Date()
         })
         .where(and(eq(accounts.id, accountId), eq(accounts.userId, user.id)));
