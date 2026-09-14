@@ -8,7 +8,10 @@ import {
   CreditCard,
   Settings,
   Receipt,
-  UploadCloud
+  UploadCloud,
+  Search,
+  Filter,
+  X
 } from "lucide-react";
 import { Transaction, Account, Category } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
@@ -38,6 +41,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const [cycleOffset, setCycleOffset] = useState<number>(0);
 
+  // Estados de Busca e Filtros Rápidos
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | "all">("all");
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState<number | "all">("all");
+  const [showFilters, setShowFilters] = useState(false);
+
   // Calcula o período atual (entre salários ou 5º dia útil)
   const currentPeriod = useMemo(() => {
     return calculateFinancialPeriods(transactions, categories, cycleOffset);
@@ -52,13 +61,42 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return b.id - a.id;
   };
 
+  // Função auxiliar de filtro que busca por texto na descrição, notas e itens detalhados da nota fiscal
+  const matchesSearchAndFilter = (t: Transaction) => {
+    // 1. Filtro por Categoria
+    if (selectedCategoryFilter !== "all" && t.categoryId !== selectedCategoryFilter) {
+      return false;
+    }
+    // 2. Filtro por Conta
+    if (selectedAccountFilter !== "all" && t.accountId !== selectedAccountFilter) {
+      return false;
+    }
+    // 3. Busca por Texto (descrição, observações ou itens da compra)
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      const matchDesc = (t.description || "").toLowerCase().includes(q);
+      const matchNotes = (t.notes || "").toLowerCase().includes(q);
+      const matchItems = t.items?.some(i => i.name.toLowerCase().includes(q));
+      if (!matchDesc && !matchNotes && !matchItems) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const pendingTransactions = useMemo(() => {
-    return transactions.filter(t => t.statusId === 2).sort(sortByNewestFirst);
-  }, [transactions]);
+    return transactions
+      .filter(t => t.statusId === 2)
+      .filter(matchesSearchAndFilter)
+      .sort(sortByNewestFirst);
+  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter]);
 
   const confirmedTransactions = useMemo(() => {
-    return transactions.filter(t => t.statusId === 1).sort(sortByNewestFirst);
-  }, [transactions]);
+    return transactions
+      .filter(t => t.statusId === 1)
+      .filter(matchesSearchAndFilter)
+      .sort(sortByNewestFirst);
+  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter]);
 
   // Filtra transações que caem exatamente dentro do ciclo financeiro selecionado
   const cycleTransactions = useMemo(() => {
@@ -75,6 +113,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const currentMonthIncome = cycleTransactions
     .filter(t => t.typeId === 1)
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
+
+  const hasActiveFilters = Boolean(searchTerm.trim() || selectedCategoryFilter !== "all" || selectedAccountFilter !== "all");
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategoryFilter("all");
+    setSelectedAccountFilter("all");
+  };
 
 
   return (
@@ -202,75 +248,186 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Lista de Transacoes Recentes */}
+      {/* Lista de Transacoes Recentes com Busca e Filtros */}
       <div>
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setActiveTab("all")}
-              className={`text-xs px-3 py-1 rounded-full font-medium transition ${
-                activeTab === "all" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"
+        <div className="flex flex-col gap-2.5 mb-3">
+          <div className="flex justify-between items-center">
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setActiveTab("all")}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${
+                  activeTab === "all" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"
+                }`}
+              >
+                Confirmadas ({confirmedTransactions.length})
+              </button>
+              <button 
+                onClick={() => setActiveTab("pending")}
+                className={`text-xs px-3 py-1.5 rounded-full font-medium transition flex items-center gap-1 ${
+                  activeTab === "pending" ? "bg-amber-500 text-slate-950 font-bold" : "bg-slate-800 text-slate-400"
+                }`}
+              >
+                Pendentes ({pendingTransactions.length})
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowFilters(prev => !prev)}
+              className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+                showFilters || hasActiveFilters
+                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                  : "bg-slate-800/80 border-slate-700/60 text-slate-400 hover:text-slate-200"
               }`}
+              title="Filtros e Busca"
             >
-              Confirmadas ({confirmedTransactions.length})
-            </button>
-            <button 
-              onClick={() => setActiveTab("pending")}
-              className={`text-xs px-3 py-1 rounded-full font-medium transition flex items-center gap-1 ${
-                activeTab === "pending" ? "bg-amber-500 text-slate-950 font-bold" : "bg-slate-800 text-slate-400"
-              }`}
-            >
-              Pendentes ({pendingTransactions.length})
+              <Filter className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Filtrar</span>
+              {hasActiveFilters && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              )}
             </button>
           </div>
+
+          {/* Barra de Pesquisa e Filtros Rápidos (Expansível) */}
+          {(showFilters || hasActiveFilters) && (
+            <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl space-y-2.5 animate-in fade-in duration-150">
+              {/* Input de Busca */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Buscar por descrição, produto ou notas..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-2.5 top-2.5 text-slate-500 hover:text-white p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdowns de Filtro */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Categoria</label>
+                  <select
+                    value={selectedCategoryFilter}
+                    onChange={(e) => setSelectedCategoryFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="all">Todas as Categorias</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Conta / Cartão</label>
+                  <select
+                    value={selectedAccountFilter}
+                    onChange={(e) => setSelectedAccountFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="all">Todas as Contas</option>
+                    {accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Indicador de Filtros Ativos e Limpar */}
+              {hasActiveFilters && (
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-xs">
+                  <span className="text-slate-400 text-[11px]">
+                    {(activeTab === "all" ? confirmedTransactions : pendingTransactions).length} resultado(s)
+                  </span>
+                  <button
+                    onClick={clearFilters}
+                    className="text-rose-400 hover:underline text-[11px] font-medium flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    Limpar filtros
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2.5">
-          {(activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
-            <div 
-              key={t.id}
-              onClick={() => onEditTransaction(t)}
-              className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${
-                t.statusId === 2 
-                  ? "border-amber-500/40 hover:bg-amber-500/10" 
-                  : "border-slate-700/40 hover:bg-slate-800"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${
-                  t.typeId === 1 ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
-                }`}>
-                  {t.typeId === 1 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
-                    {t.items && t.items.length > 0 && (
-                      <span className="flex items-center gap-1 text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                        <Receipt className="w-3 h-3" />
-                        {t.items.length} itens
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400">
-                    {new Date(t.date).toLocaleDateString("pt-BR")}
-                    {t.rawBankNotification && " • Via Notificação Bancária"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className={`text-sm font-bold ${
-                  t.typeId === 1 ? "text-emerald-400" : "text-slate-100"
-                }`}>
-                  {t.typeId === 1 ? "+" : "-"} R$ {parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </span>
-                {t.statusId === 2 && (
-                  <p className="text-[10px] text-amber-400 font-medium">Toque p/ aprovar</p>
-                )}
-              </div>
+          {(activeTab === "all" ? confirmedTransactions : pendingTransactions).length === 0 ? (
+            <div className="p-8 text-center bg-slate-900/40 border border-slate-800/80 rounded-2xl">
+              <Search className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-300">Nenhuma transação encontrada</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {hasActiveFilters 
+                  ? "Tente alterar os termos da busca ou limpar os filtros."
+                  : "Nenhuma transação registrada nesta aba."}
+              </p>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="mt-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition inline-flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Limpar Filtros
+                </button>
+              )}
             </div>
-          ))}
+          ) : (
+            (activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
+              <div 
+                key={t.id}
+                onClick={() => onEditTransaction(t)}
+                className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${
+                  t.statusId === 2 
+                    ? "border-amber-500/40 hover:bg-amber-500/10" 
+                    : "border-slate-700/40 hover:bg-slate-800"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${
+                    t.typeId === 1 ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                  }`}>
+                    {t.typeId === 1 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
+                      {t.items && t.items.length > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                          <Receipt className="w-3 h-3" />
+                          {t.items.length} itens
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {new Date(t.date).toLocaleDateString("pt-BR")}
+                      {t.rawBankNotification && " • Via Notificação Bancária"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className={`text-sm font-bold ${
+                    t.typeId === 1 ? "text-emerald-400" : "text-slate-100"
+                  }`}>
+                    {t.typeId === 1 ? "+" : "-"} R$ {parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </span>
+                  {t.statusId === 2 && (
+                    <p className="text-[10px] text-amber-400 font-medium">Toque p/ aprovar</p>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
