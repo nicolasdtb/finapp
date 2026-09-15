@@ -58,6 +58,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [itemQty, setItemQty] = useState("1");
   const [itemPriceCents, setItemPriceCents] = useState<number>(0);
   const [itemTagIds, setItemTagIds] = useState<number[]>([]);
+  const [activeTagPickerItemIndex, setActiveTagPickerItemIndex] = useState<number | null>(null);
+  const [showNewItemTagPicker, setShowNewItemTagPicker] = useState(false);
 
   // Leitor de Nota Fiscal (QR Code)
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -427,61 +429,90 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 {/* Lista de Itens Adicionados */}
                 {items.length > 0 && (
                   <div className="divide-y divide-slate-800 max-h-56 overflow-y-auto pt-1 mt-2 border-t border-slate-800">
-                    {items.map((it, idx) => (
-                      <div key={idx} className="py-2.5 flex flex-col gap-1.5">
-                        <div className="flex justify-between items-start text-xs">
-                          <span className="text-slate-200 font-medium truncate flex-1 pr-2">
-                            {formatQuantity(it.quantity)}x {it.name}
-                          </span>
-                          <div className="flex items-center gap-2.5">
-                            <span className="font-bold text-slate-100">
-                              R$ {parseFloat(it.totalPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition shrink-0"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
+                    {items.map((it, idx) => {
+                      const itemSelectedTags = (it.tagIds || []).map(tid => tags.find(t => t.id === tid)).filter(Boolean) as Tag[];
+                      const isPickerOpen = activeTagPickerItemIndex === idx;
 
-                        {/* Tags do Item (Clicáveis para adicionar/remover rapidamente) */}
-                        {tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-0.5">
-                            {tags.map(t => {
-                              const isSelected = (it.tagIds || []).includes(t.id);
-                              return (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setItems(prev => prev.map((item, i) => {
-                                      if (i !== idx) return item;
-                                      const current = item.tagIds || [];
-                                      const updated = current.includes(t.id)
-                                        ? current.filter(id => id !== t.id)
-                                        : [...current, t.id];
-                                      return { ...item, tagIds: updated };
-                                    }));
-                                  }}
-                                  style={{ 
-                                    backgroundColor: isSelected ? t.color : 'transparent',
-                                    borderColor: isSelected ? t.color : t.color + '40',
-                                    color: isSelected ? '#fff' : t.color + 'aa'
-                                  }}
-                                  className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5 transition-all"
-                                >
-                                  <TagIcon className="w-2.5 h-2.5" />
-                                  {t.name}
-                                </button>
-                              );
-                            })}
+                      return (
+                        <div key={idx} className="py-2 flex flex-col gap-1 text-xs">
+                          <div className="flex justify-between items-start">
+                            <span className="text-slate-200 font-medium truncate flex-1 pr-2">
+                              {formatQuantity(it.quantity)}x {it.name}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-100">
+                                R$ {parseFloat(it.totalPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(idx)}
+                                className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Renderiza apenas as tags selecionadas + botão de editar/adicionar tag */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            {itemSelectedTags.map(t => (
+                              <span
+                                key={t.id}
+                                style={{ backgroundColor: t.color + '20', color: t.color, borderColor: t.color + '50' }}
+                                className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                              >
+                                <TagIcon className="w-2.5 h-2.5" />
+                                {t.name}
+                              </span>
+                            ))}
+
+                            {tags.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveTagPickerItemIndex(isPickerOpen ? null : idx)}
+                                className="px-1.5 py-0.5 text-[9px] font-semibold text-slate-400 hover:text-blue-400 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded transition flex items-center gap-1"
+                              >
+                                <span>{isPickerOpen ? "Fechar Tags" : "+ Tag"}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Seletor expandível para o item específico (evita poluição na tela) */}
+                          {isPickerOpen && tags.length > 0 && (
+                            <div className="mt-1 p-2 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap gap-1 shadow-inner">
+                              {tags.map(t => {
+                                const isSelected = (it.tagIds || []).includes(t.id);
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setItems(prev => prev.map((item, i) => {
+                                        if (i !== idx) return item;
+                                        const current = item.tagIds || [];
+                                        const updated = current.includes(t.id)
+                                          ? current.filter(id => id !== t.id)
+                                          : [...current, t.id];
+                                        return { ...item, tagIds: updated };
+                                      }));
+                                    }}
+                                    style={{ 
+                                      backgroundColor: isSelected ? t.color : 'transparent',
+                                      borderColor: isSelected ? t.color : t.color + '40',
+                                      color: isSelected ? '#fff' : t.color
+                                    }}
+                                    className="px-2 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5 transition-all"
+                                  >
+                                    <TagIcon className="w-2.5 h-2.5" />
+                                    {t.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
