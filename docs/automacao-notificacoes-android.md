@@ -1,6 +1,6 @@
 # Guia de Captura Automática de Notificações Bancárias (Android)
 
-Este guia explica como configurar o **Automate (LlamaLab)** para capturar notificações bancárias no Android e enviá-las para o FinApp via webhook, inclusive **com fila offline** para quando você estiver fora da VPN (ZeroTier).
+Este guia explica como configurar o **Automate (LlamaLab)** para capturar notificações bancárias no Android e enviá-las para o FinApp via webhook, com **fila offline** para quando você estiver fora da VPN (ZeroTier).
 
 ---
 
@@ -8,34 +8,49 @@ Este guia explica como configurar o **Automate (LlamaLab)** para capturar notifi
 
 Sempre que uma compra no cartão de crédito/débito ou transferência Pix é realizada, o aplicativo do seu banco emite uma notificação no Android. O Automate captura essa notificação e dispara um webhook para a sua VM Linux via ZeroTier (`https://finapp.zt`).
 
-O FinApp extrai o **valor** e o **estabelecimento**, vincula à conta correspondente e coloca o gasto como **Pendente de Confirmação** no topo do Dashboard para você categorizar e aprovar com 1 toque!
+O FinApp extrai o **valor** e o **estabelecimento**, vincula à conta correspondente e coloca o gasto como **Pendente de Confirmação** no Dashboard para você aprovar com 1 toque!
 
 ---
 
-## Fluxo com Fila Offline (Recomendado)
+## Funções suportadas no Automate (expressões)
 
-Como a VM só é acessível via VPN, o fluxo salva as notificações num arquivo local quando você estiver offline. Quando a VPN conectar e uma nova notificação chegar, o Automate envia tudo em lote e limpa a fila.
-
-> **Importante:** O Automate não tem funções como `arrayConcat` ou `listAdd` em expressões inline. A fila é construída manipulando a string JSON diretamente usando concatenação de texto.
-
-### Lógica de Construção da Fila (string JSON)
-
-A fila é um arquivo de texto com um array JSON. Cada nova notificação é inserida com a seguinte lógica:
-
-- **Fila vazia** (`""` ou `"[]"`): escreve `[{...nova notificação...}]`
-- **Fila com itens**: remove o `]` final, adiciona `,{...nova notificação...}]`
-
-Isso é feito com concatenação de string sem precisar de nenhuma função especial.
-
----
-
-### Blocos do Fluxo no Automate
-
-Crie um novo fluxo (+) e adicione os seguintes blocos em sequência:
+> Antes de montar o fluxo, é importante saber o que **funciona de verdade** nas expressões do Automate:
+>
+> ✅ `jsonEncode(dict)` — converte um dicionário em string JSON  
+> ✅ `jsonDecode(string)` — converte string JSON em dicionário  
+> ✅ Concatenação com `&` — ex: `"[" & variavel & "]"`  
+> ✅ Operador ternário `? :` — ex: `x = "" ? "sim" : "nao"`  
+> ✅ Comparações: `=`, `≠`, `<`, `>`, `≤`, `≥`  
+> ❌ `substring()` — **não existe**  
+> ❌ `length()` — **não existe**  
+> ❌ `arrayConcat()` — **não existe**  
+> ❌ `replace()` — **não existe**
 
 ---
 
-#### Bloco 1 — Gatilho: `Notification posted?`
+## Estratégia da Fila Offline
+
+O arquivo de fila armazena as notificações separadas por vírgula (sem colchetes):
+
+```
+{"app_name":"...","title":"...","text":"..."},{"app_name":"...","title":"...","text":"..."}
+```
+
+- **Fila vazia** → grava `new_item` em modo overwrite
+- **Fila com itens** → grava `"," & new_item` em modo **APPEND** (sem precisar de substring!)
+- **Na hora de enviar** → HTTP body = `"[" & queue_content & "]"` (só concatenação com `&`)
+
+Dessa forma, nenhuma função de string avançada é necessária.
+
+---
+
+## Blocos do Fluxo no Automate
+
+Crie um novo fluxo (+) com **11 blocos** em sequência. Todos os nomes estão conforme o menu do Automate.
+
+---
+
+### Bloco 1 — `Notification posted?`
 | Campo | Valor |
 |-------|-------|
 | Package name | Selecione os apps dos bancos (ex: `com.nu.production`) |
@@ -43,156 +58,180 @@ Crie um novo fluxo (+) e adicione os seguintes blocos em sequência:
 | Output → Message/Text | `not_text` |
 | Output → Package name | `not_app` |
 
-Conecte a saída **Notification posted** ao próximo bloco.
+→ Saída **Notification posted** vai para o **Bloco 2**.
 
 ---
 
-#### Bloco 2 — `File read text` (lê a fila atual)
+### Bloco 2 — `File read text` (lê a fila atual)
 | Campo | Valor |
 |-------|-------|
 | File | `/storage/emulated/0/Download/finapp_queue.txt` |
 | Output variable | `queue_content` |
 
-> Se o arquivo não existir ainda, `queue_content` ficará vazio (`""`). O próximo bloco trata isso.
+→ Se o arquivo não existir ainda, `queue_content` fica vazio (`""`). Vai para o **Bloco 3**.
 
 ---
 
-#### Bloco 3 — `Variable set` (monta o novo item JSON)
+### Bloco 3 — `Variable set` (monta o JSON do item)
 | Campo | Valor |
 |-------|-------|
 | Variable | `new_item` |
 | Value | `jsonEncode({"app_name": not_app, "title": not_title, "text": not_text})` |
 
-O Automate suporta dicionários literais `{chave: valor}` nas expressões, então o `jsonEncode` converte isso para uma string JSON sem precisar de nenhuma aspa escapada com `\`.
+→ Vai para o **Bloco 4**.
 
 ---
 
-#### Bloco 4 — `Variable set` (anexa o item na fila)
+### Bloco 4 — `Expression true?` (fila está vazia?)
 | Campo | Valor |
 |-------|-------|
-| Variable | `updated_queue` |
-| Value | `(queue_content = "" \| queue_content = "[]") ? "[" & new_item & "]" : substring(queue_content, 0, length(queue_content) - 1) & "," & new_item & "]"` |
+| Formula | `queue_content = ""` |
 
-**Explicação da expressão:**
-- Se a fila está vazia → cria `[{novo_item}]`
-- Se já tem itens → remove o `]` final com `substring(..., length-1)` e adiciona `,{novo_item}]`
+- **YES (vazia)** → vai para o **Bloco 5**
+- **NO (já tem itens)** → vai para o **Bloco 6**
 
 ---
 
-#### Bloco 5 — `File write text` (salva a fila no arquivo)
+### Bloco 5 — `File write text` (cria fila com primeiro item)
 | Campo | Valor |
 |-------|-------|
 | File | `/storage/emulated/0/Download/finapp_queue.txt` |
-| Text | `updated_queue` |
-| Append | **NÃO** (sobrescreve o arquivo inteiro) |
+| Text | `new_item` |
+| Append | **NÃO** (sobrescreve) |
+
+→ Vai para o **Bloco 7**.
 
 ---
 
-#### Bloco 6 — `Host address resolve` (checa se a VPN está ativa)
+### Bloco 6 — `File write text` (adiciona item na fila)
+| Campo | Valor |
+|-------|-------|
+| File | `/storage/emulated/0/Download/finapp_queue.txt` |
+| Text | `"," & new_item` |
+| Append | **SIM** (adiciona ao final) |
+
+→ Vai para o **Bloco 7**.
+
+---
+
+### Bloco 7 — `File read text` (relê a fila completa)
+| Campo | Valor |
+|-------|-------|
+| File | `/storage/emulated/0/Download/finapp_queue.txt` |
+| Output variable | `queue_content` |
+
+→ Vai para o **Bloco 8**.
+
+---
+
+### Bloco 8 — `Host address resolve` (checa se a VPN está ativa)
 | Campo | Valor |
 |-------|-------|
 | Hostname | `finapp.zt` |
 | Output variable | `resolved_ip` |
 
-- **Resolveu (YES / não-vazio)** → vai para o **Bloco 7**
-- **Não resolveu (NO / vazio)** → volta direto para o **Bloco 1** (fica na fila e aguarda)
+- **Não resolveu (vazio)** → volta para o **Bloco 1** (fica na fila, aguarda VPN)
+- **Resolveu** → vai para o **Bloco 9**
 
-> Alternativa: use o bloco **Ping** apontando para `172.23.17.157` se preferir verificar por IP.
+> Alternativa: use o bloco **Ping** com o IP `172.23.17.157` se preferir verificar por IP direto.
 
 ---
 
-#### Bloco 7 — `HTTP request` (envia a fila completa)
+### Bloco 9 — `HTTP request` (envia a fila completa)
 | Campo | Valor |
 |-------|-------|
 | Request URL | `https://finapp.zt/api/v1/webhooks/bank-notification` |
 | Method | `POST` |
 | Content type | `JSON` |
-| Request content | `updated_queue` |
+| Request content | `"[" & queue_content & "]"` |
 | Output → Status code | `http_status` |
 
-O FinApp aceita tanto um objeto único `{...}` quanto um array `[{...},{...}]`.
+O FinApp aceita tanto objeto único `{...}` quanto array `[{...},{...}]`.
+
+→ Vai para o **Bloco 10**.
 
 ---
 
-#### Bloco 8 — `Expression true?` (verifica sucesso)
+### Bloco 10 — `Expression true?` (envio foi bem-sucedido?)
 | Campo | Valor |
 |-------|-------|
 | Formula | `http_status = 201` |
 
-- **YES (201)** → vai para o **Bloco 9** (limpa a fila)
-- **NO (erro)** → volta para o **Bloco 1** (itens ficam na fila para a próxima tentativa)
+- **YES (201)** → vai para o **Bloco 11** (limpa a fila)
+- **NO (erro/offline)** → volta para o **Bloco 1** (itens ficam na fila)
 
 ---
 
-#### Bloco 9 — `File write text` (esvazia a fila após envio com sucesso)
+### Bloco 11 — `File write text` (esvazia a fila após sucesso)
 | Campo | Valor |
 |-------|-------|
 | File | `/storage/emulated/0/Download/finapp_queue.txt` |
-| Text | `[]` |
+| Text | *(deixar em branco)* |
+| Append | **NÃO** (sobrescreve com vazio) |
 
-Depois deste bloco, conecte de volta ao **Bloco 1** para fechar o loop.
+→ Volta para o **Bloco 1** (loop contínuo de escuta).
 
 ---
 
-### Diagrama do Fluxo
+## Diagrama do Fluxo
 
 ```
-[Bloco 1: Notification posted?]
+[1: Notification posted?]
          |
-[Bloco 2: File read text] ← lê fila atual
+[2: File read text] ← lê fila
          |
-[Bloco 3: Variable set] ← monta new_item como JSON string
+[3: Variable set] ← new_item = jsonEncode({...})
          |
-[Bloco 4: Variable set] ← anexa na fila (concatenação de string)
-         |
-[Bloco 5: File write text] ← salva fila no arquivo
-         |
-[Bloco 6: Host address resolve finapp.zt]
-    NO ↙       ↘ YES
-[Bloco 1]   [Bloco 7: HTTP request POST fila]
-                 |
-         [Bloco 8: http_status = 201?]
-         NO ↙         ↘ YES
-      [Bloco 1]   [Bloco 9: File write "[]"]
-                         |
-                     [Bloco 1]
+[4: Expression: queue_content = ""?]
+   YES ↙         ↘ NO
+[5: File write]  [6: File write APPEND]
+  overwrite        "," & new_item
+        ↘        ↙
+     [7: File read text] ← relê fila completa
+              |
+[8: Host address resolve finapp.zt]
+   Vazio ↙           ↘ Resolveu
+[Bloco 1]     [9: HTTP POST "[" & queue_content & "]"]
+                        |
+              [10: http_status = 201?]
+          NO ↙               ↘ YES
+       [Bloco 1]        [11: File write vazio]
+                                  |
+                             [Bloco 1]
 ```
 
 ---
 
 ## Comandos de Teste do Webhook
 
-Teste o webhook diretamente do terminal da VM ou PowerShell:
-
-### Notificação única (objeto JSON)
+### Notificação única
 ```bash
 curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
   -H "Content-Type: application/json" \
   -d '{"app_name": "Nubank", "title": "Compra aprovada", "text": "Compra de R$ 68,40 aprovada em Supermercado Extra"}'
 ```
 
-### Lote de notificações (array JSON — simula envio da fila offline)
+### Lote (simula envio da fila offline)
 ```bash
 curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
   -H "Content-Type: application/json" \
   -d '[
     {"app_name": "Nubank", "title": "Compra aprovada", "text": "Compra de R$ 68,40 aprovada em Supermercado Extra"},
-    {"app_name": "Nubank", "title": "Compra no débito", "text": "Você pagou R$ 15,00 no débito em Padaria Santo Pão"},
-    {"app_name": "Inter", "title": "Compra confirmada", "text": "Compra no cartão de crédito de R$ 89,90 aprovada em Posto Ipiranga"}
+    {"app_name": "Nubank", "title": "Compra no débito", "text": "Você pagou R$ 15,00 no débito em Padaria Santo Pão"}
   ]'
 ```
 
 ### Outros exemplos
 ```bash
-# Compra por aproximação
-curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
-  -H "Content-Type: application/json" \
-  -d '{"app_name": "Nubank", "title": "Compra aprovada", "text": "Compra por aproximação de R$ 32,50 no Restaurante Sabor Brasil"}'
-
-# Transferência Pix enviada
+# Pix enviado
 curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
   -H "Content-Type: application/json" \
   -d '{"app_name": "Nubank", "title": "Transferência enviada", "text": "Você transferiu R$ 120,00 para Maria da Silva"}'
+
+# Banco Inter
+curl -k -X POST https://finapp.zt/api/v1/webhooks/bank-notification \
+  -H "Content-Type: application/json" \
+  -d '{"app_name": "Inter", "title": "Compra confirmada", "text": "Compra no cartão de crédito de R$ 89,90 aprovada em Posto Ipiranga"}'
 ```
 
 ---
@@ -208,4 +247,4 @@ O FinApp responderá com `201 Created`:
 }
 ```
 
-Ao abrir o **FinApp** (`https://finapp.zt`), o banner amarelo piscando no topo do Dashboard mostrará as compras pendentes para você categorizar e aprovar com 1 toque!
+Ao abrir o **FinApp** (`https://finapp.zt`), o banner amarelo no topo do Dashboard mostrará as compras pendentes para categorizar e aprovar!
