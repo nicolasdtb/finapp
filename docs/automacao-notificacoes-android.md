@@ -61,9 +61,9 @@ Conecte a saída **Notification posted** ao próximo bloco.
 | Campo | Valor |
 |-------|-------|
 | Variable | `new_item` |
-| Value | `"{\"app_name\":\"" & not_app & "\",\"title\":\"" & not_title & "\",\"text\":\"" & not_text & "\"}"` |
+| Value | `jsonEncode({"app_name": not_app, "title": not_title, "text": not_text})` |
 
-Este bloco monta o objeto JSON da notificação como string.
+O Automate suporta dicionários literais `{chave: valor}` nas expressões, então o `jsonEncode` converte isso para uma string JSON sem precisar de nenhuma aspa escapada com `\`.
 
 ---
 
