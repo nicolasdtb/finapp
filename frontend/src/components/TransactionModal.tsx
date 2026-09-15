@@ -60,6 +60,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [itemTagIds, setItemTagIds] = useState<number[]>([]);
   const [activeTagPickerItemIndex, setActiveTagPickerItemIndex] = useState<number | null>(null);
   const [showNewItemTagPicker, setShowNewItemTagPicker] = useState(false);
+  const [showTxTagPicker, setShowTxTagPicker] = useState(false);
 
   // Leitor de Nota Fiscal (QR Code)
   const [isScannerOpen, setIsScannerOpen] = useState(false);

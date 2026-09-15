@@ -48,6 +48,7 @@ export const formatQuantity = (qty: string | number | undefined | null): string 
 
 // Retorna a data atual no formato YYYY-MM-DD respeitando o fuso horário local do navegador
 export const getTodayLocalDateString = (d: Date = new Date()): string => {
+  if (!d || isNaN(d.getTime())) d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
