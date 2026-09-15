@@ -291,29 +291,65 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           {tags.length > 0 && (
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Tags</label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map(t => {
-                  const isSelected = tagIds.includes(t.id);
+              <div className="flex flex-wrap items-center gap-1.5">
+                {tagIds.map(tid => {
+                  const t = tags.find(tag => tag.id === tid);
+                  if (!t) return null;
                   return (
-                    <button
+                    <span
                       key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setTagIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]);
-                      }}
-                      style={{ 
-                        backgroundColor: isSelected ? t.color : 'transparent',
-                        borderColor: t.color,
-                        color: isSelected ? '#fff' : t.color
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border flex items-center gap-1 transition-all"
+                      style={{ backgroundColor: t.color + '25', color: t.color, borderColor: t.color + '60' }}
+                      className="px-2.5 py-1 text-xs font-bold rounded-xl border flex items-center gap-1.5"
                     >
                       <TagIcon className="w-3 h-3" />
                       {t.name}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setTagIds(prev => prev.filter(id => id !== t.id))}
+                        className="hover:opacity-75 font-extrabold text-xs ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
                   );
                 })}
+
+                <button
+                  type="button"
+                  onClick={() => setShowTxTagPicker(!showTxTagPicker)}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl transition flex items-center gap-1"
+                >
+                  <TagIcon className="w-3 h-3 text-blue-400" />
+                  <span>{showTxTagPicker ? "Fechar Tags" : tagIds.length > 0 ? "+ Adicionar Tag" : "Selecionar Tags"}</span>
+                </button>
               </div>
+
+              {/* Seletor Expansível de Tags (Evita poluição visual com 20+ tags) */}
+              {showTxTagPicker && (
+                <div className="mt-2 p-3 bg-slate-950 border border-slate-800 rounded-2xl flex flex-wrap gap-2 animate-in fade-in duration-150">
+                  {tags.map(t => {
+                    const isSelected = tagIds.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setTagIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]);
+                        }}
+                        style={{ 
+                          backgroundColor: isSelected ? t.color : 'transparent',
+                          borderColor: isSelected ? t.color : t.color + '40',
+                          color: isSelected ? '#fff' : t.color
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold rounded-xl border flex items-center gap-1 transition-all"
+                      >
+                        <TagIcon className="w-3 h-3" />
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

@@ -11,9 +11,10 @@ import {
   UploadCloud,
   Search,
   Filter,
-  X
+  X,
+  Tag as TagIcon
 } from "lucide-react";
-import { Transaction, Account, Category } from "../services/api.js";
+import { Transaction, Account, Category, Tag } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 
@@ -21,6 +22,7 @@ interface DashboardProps {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];
+  tags: Tag[];
   onNewTransaction: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
@@ -32,6 +34,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   transactions, 
   accounts, 
   categories,
+  tags,
   onNewTransaction, 
   onEditTransaction,
   onConfirmPending,
@@ -45,6 +48,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | "all">("all");
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<number | "all">("all");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<number | "all">("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // Calcula o período atual (entre salários ou 5º dia útil)
@@ -71,7 +75,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (selectedAccountFilter !== "all" && t.accountId !== selectedAccountFilter) {
       return false;
     }
-    // 3. Busca por Texto (descrição, observações ou itens da compra)
+    // 3. Filtro por Tag (checa tanto a transação raíz quanto itens individuais)
+    if (selectedTagFilter !== "all") {
+      const hasTxTag = t.tagIds?.includes(selectedTagFilter);
+      const hasItemTag = t.items?.some(i => i.tagIds?.includes(selectedTagFilter));
+      if (!hasTxTag && !hasItemTag) {
+        return false;
+      }
+    }
+    // 4. Busca por Texto (descrição, observações ou itens da compra)
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase().trim();
       const matchDesc = (t.description || "").toLowerCase().includes(q);
@@ -89,14 +101,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .filter(t => t.statusId === 2)
       .filter(matchesSearchAndFilter)
       .sort(sortByNewestFirst);
-  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter]);
+  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
 
   const confirmedTransactions = useMemo(() => {
     return transactions
       .filter(t => t.statusId === 1)
       .filter(matchesSearchAndFilter)
       .sort(sortByNewestFirst);
-  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter]);
+  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
 
   // Filtra transações que caem exatamente dentro do ciclo financeiro selecionado
   const cycleTransactions = useMemo(() => {
@@ -114,12 +126,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
     .filter(t => t.typeId === 1)
     .reduce((acc, t) => acc + parseFloat(t.amount || "0"), 0);
 
-  const hasActiveFilters = Boolean(searchTerm.trim() || selectedCategoryFilter !== "all" || selectedAccountFilter !== "all");
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || 
+    selectedCategoryFilter !== "all" || 
+    selectedAccountFilter !== "all" ||
+    selectedTagFilter !== "all"
+  );
 
   const clearFilters = () => {
     setSearchTerm("");
     setSelectedCategoryFilter("all");
     setSelectedAccountFilter("all");
+    setSelectedTagFilter("all");
   };
 
 
@@ -312,15 +330,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
 
               {/* Dropdowns de Filtro */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Categoria</label>
                   <select
                     value={selectedCategoryFilter}
                     onChange={(e) => setSelectedCategoryFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2 py-1.5 focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="all">Todas as Categorias</option>
+                    <option value="all">Todas</option>
                     {categories.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
@@ -328,15 +346,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Conta / Cartão</label>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Conta</label>
                   <select
                     value={selectedAccountFilter}
                     onChange={(e) => setSelectedAccountFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2 py-1.5 focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="all">Todas as Contas</option>
+                    <option value="all">Todas</option>
                     {accounts.map(a => (
                       <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Tag</label>
+                  <select
+                    value={selectedTagFilter}
+                    onChange={(e) => setSelectedTagFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-2 py-1.5 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="all">Todas</option>
+                    {tags.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                 </div>
@@ -408,10 +440,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400">
-                      {new Date(t.date).toLocaleDateString("pt-BR")}
-                      {t.rawBankNotification && " • Via Notificação Bancária"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-slate-400">
+                        {new Date(t.date).toLocaleDateString("pt-BR")}
+                        {t.rawBankNotification && " • Via Notificação"}
+                      </p>
+
+                      {t.tagIds && t.tagIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1 ml-1">
+                          {t.tagIds.map(tid => {
+                            const tg = tags.find(tag => tag.id === tid);
+                            if (!tg) return null;
+                            return (
+                              <span
+                                key={tg.id}
+                                style={{ backgroundColor: tg.color + '20', color: tg.color, borderColor: tg.color + '40' }}
+                                className="px-1.5 py-0.2 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                              >
+                                <TagIcon className="w-2.5 h-2.5" />
+                                {tg.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

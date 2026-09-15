@@ -156,6 +156,7 @@ export function App() {
             transactions={transactions}
             accounts={accounts}
             categories={categories}
+            tags={tags}
             onNewTransaction={() => {
               setEditingTransaction(null);
               setIsModalOpen(true);
