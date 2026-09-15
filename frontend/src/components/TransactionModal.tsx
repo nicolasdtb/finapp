@@ -426,9 +426,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
                 {/* Lista de Itens Adicionados */}
                 {items.length > 0 && (
-                  <div className="divide-y divide-slate-800 max-h-40 overflow-y-auto pt-1 mt-2 border-t border-slate-800">
+                  <div className="divide-y divide-slate-800 max-h-56 overflow-y-auto pt-1 mt-2 border-t border-slate-800">
                     {items.map((it, idx) => (
-                      <div key={idx} className="py-2 flex flex-col gap-1">
+                      <div key={idx} className="py-2.5 flex flex-col gap-1.5">
                         <div className="flex justify-between items-start text-xs">
                           <span className="text-slate-200 font-medium truncate flex-1 pr-2">
                             {formatQuantity(it.quantity)}x {it.name}
@@ -446,20 +446,36 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                             </button>
                           </div>
                         </div>
-                        {it.tagIds && it.tagIds.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {it.tagIds.map(tid => {
-                              const t = tags.find(tag => tag.id === tid);
-                              if (!t) return null;
+
+                        {/* Tags do Item (Clicáveis para adicionar/remover rapidamente) */}
+                        {tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {tags.map(t => {
+                              const isSelected = (it.tagIds || []).includes(t.id);
                               return (
-                                <span
-                                  key={tid}
-                                  style={{ backgroundColor: t.color + '20', color: t.color, borderColor: t.color + '40' }}
-                                  className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setItems(prev => prev.map((item, i) => {
+                                      if (i !== idx) return item;
+                                      const current = item.tagIds || [];
+                                      const updated = current.includes(t.id)
+                                        ? current.filter(id => id !== t.id)
+                                        : [...current, t.id];
+                                      return { ...item, tagIds: updated };
+                                    }));
+                                  }}
+                                  style={{ 
+                                    backgroundColor: isSelected ? t.color : 'transparent',
+                                    borderColor: isSelected ? t.color : t.color + '40',
+                                    color: isSelected ? '#fff' : t.color + 'aa'
+                                  }}
+                                  className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5 transition-all"
                                 >
                                   <TagIcon className="w-2.5 h-2.5" />
                                   {t.name}
-                                </span>
+                                </button>
                               );
                             })}
                           </div>
