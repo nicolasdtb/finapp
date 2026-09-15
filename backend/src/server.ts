@@ -27,8 +27,10 @@ async function start() {
   // Inicializa tabelas, usuarios e seeds
   await initDatabase();
 
-  // Health check
+  // Health check endpoints
   app.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
+  app.get("/api/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
+  app.get("/api/v1/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
 
   // Modulos da aplicacao
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
