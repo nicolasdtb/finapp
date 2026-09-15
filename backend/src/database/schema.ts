@@ -125,6 +125,11 @@ export const transactionTags = pgTable("transaction_tags", {
   tagId: integer("tag_id").references(() => tags.id).notNull(),
 });
 
+export const transactionItemTags = pgTable("transaction_item_tags", {
+  transactionItemId: integer("transaction_item_id").references(() => transactionItems.id).notNull(),
+  tagId: integer("tag_id").references(() => tags.id).notNull(),
+});
+
 export const budgets = pgTable("budgets", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").references(() => categories.id).notNull(),

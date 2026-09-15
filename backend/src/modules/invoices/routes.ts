@@ -29,22 +29,53 @@ export async function invoiceRoutes(app: FastifyInstance) {
   // POST /api/v1/invoices/parse
   app.post("/parse", async (request, reply) => {
     const schema = z.object({
-      url: z.string().url(),
+      url: z.string().min(1),
     });
 
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
         success: false,
-        message: "URL de Nota Fiscal inválida."
+        message: "URL ou Chave de Acesso de Nota Fiscal inválida."
       });
     }
 
-    const { url } = parsed.data;
-    app.log.info({ invoiceUrl: url }, "Iniciando consulta de Nota Fiscal SEFAZ");
+    let input = parsed.data.url.trim();
+    let targetUrl = input;
+
+    // Se for uma chave de acesso de 44 dígitos (numérica pura ou com espaços/traços)
+    const cleanedDigits = input.replace(/\D/g, "");
+    if (cleanedDigits.length === 44) {
+      const ufCode = cleanedDigits.substring(0, 2);
+      switch (ufCode) {
+        case "43": // Rio Grande do Sul
+          targetUrl = `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=${cleanedDigits}|2|1|1`;
+          break;
+        case "35": // São Paulo
+          targetUrl = `https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=${cleanedDigits}`;
+          break;
+        case "41": // Paraná
+          targetUrl = `http://www.fazenda.pr.gov.br/nfce/qrcode?p=${cleanedDigits}|2|1|1`;
+          break;
+        case "31": // Minas Gerais
+          targetUrl = `https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/consultaarg.xhtml?p=${cleanedDigits}`;
+          break;
+        case "33": // Rio de Janeiro
+          targetUrl = `http://www.fazenda.rj.gov.br/actrnfce/qrcode?p=${cleanedDigits}|2|1|1`;
+          break;
+        case "42": // Santa Catarina
+          targetUrl = `https://sat.sef.sc.gov.br/nfce/consulta?p=${cleanedDigits}|2|1|1`;
+          break;
+        default: // Fallback padrão SEFAZ RS / SVRS
+          targetUrl = `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=${cleanedDigits}|2|1|1`;
+          break;
+      }
+    }
+
+    app.log.info({ originalInput: input, targetUrl }, "Iniciando consulta de Nota Fiscal SEFAZ");
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(targetUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"

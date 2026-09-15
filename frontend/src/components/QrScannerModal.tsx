@@ -138,9 +138,9 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           {showManualInput && (
             <form onSubmit={handleManualSubmit} className="mt-2 space-y-2">
               <input
-                type="url"
+                type="text"
                 required
-                placeholder="https://www.sefaz... ou cole o link do QR Code"
+                placeholder="Cole a URL ou a chave de 44 dígitos da nota..."
                 value={manualUrl}
                 onChange={(e) => setManualUrl(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"

@@ -114,6 +114,12 @@ CREATE TABLE IF NOT EXISTS transaction_tags (
   PRIMARY KEY (transaction_id, tag_id)
 );
 
+CREATE TABLE IF NOT EXISTS transaction_item_tags (
+  transaction_item_id INTEGER NOT NULL REFERENCES transaction_items(id),
+  tag_id INTEGER NOT NULL REFERENCES tags(id),
+  PRIMARY KEY (transaction_item_id, tag_id)
+);
+
 CREATE TABLE IF NOT EXISTS budgets (
   id SERIAL PRIMARY KEY,
   category_id INTEGER NOT NULL REFERENCES categories(id),
@@ -166,6 +172,11 @@ export async function initDatabase() {
     // Migração defensiva: adiciona coluna import_id se não existir
     await pool.query(`
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS import_id TEXT;
+      CREATE TABLE IF NOT EXISTS transaction_item_tags (
+        transaction_item_id INTEGER NOT NULL REFERENCES transaction_items(id),
+        tag_id INTEGER NOT NULL REFERENCES tags(id),
+        PRIMARY KEY (transaction_item_id, tag_id)
+      );
     `);
     console.log("✅ Banco de dados e tabela de usuários inicializados com sucesso!");
   } catch (err) {

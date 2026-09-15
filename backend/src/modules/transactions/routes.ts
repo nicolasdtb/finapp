@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
-import { transactions, transactionItems, accounts, categories, tags } from "../../database/schema.js";
-import { desc, eq, isNull, sql, and } from "drizzle-orm";
+import { transactions, transactionItems, transactionTags, transactionItemTags, accounts, categories, tags } from "../../database/schema.js";
+import { desc, eq, isNull, sql, and, inArray } from "drizzle-orm";
 
 export async function transactionRoutes(app: FastifyInstance) {
   // Hook de autenticacao obrigatoria
@@ -14,7 +14,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     }
   });
 
-  // Listar transacoes do usuario logado (ignora soft-deleted)
+  // Listar transacoes do usuario logado (ignora soft-deleted) com tags
   app.get("/", async (request, reply) => {
     const user = request.user as { id: number };
     const all = await db.select().from(transactions)
@@ -22,10 +22,22 @@ export async function transactionRoutes(app: FastifyInstance) {
       .orderBy(desc(transactions.date), desc(transactions.id));
     
     const items = await db.select().from(transactionItems).where(isNull(transactionItems.deletedAt));
-    const txMap = all.map(t => ({
-      ...t,
-      items: items.filter(i => i.transactionId === t.id)
-    }));
+    const allTxTags = await db.select().from(transactionTags);
+    const allItemTags = await db.select().from(transactionItemTags);
+
+    const txMap = all.map(t => {
+      const txTagIds = allTxTags.filter(tt => tt.transactionId === t.id).map(tt => tt.tagId);
+      const tItems = items.filter(i => i.transactionId === t.id).map(i => ({
+        ...i,
+        tagIds: allItemTags.filter(it => it.transactionItemId === i.id).map(it => it.tagId)
+      }));
+
+      return {
+        ...t,
+        tagIds: txTagIds,
+        items: tItems
+      };
+    });
 
     return reply.send(txMap);
   });
@@ -43,12 +55,14 @@ export async function transactionRoutes(app: FastifyInstance) {
       categoryId: z.number().nullable().optional(),
       destinationAccountId: z.number().nullable().optional(),
       notes: z.string().nullable().optional(),
+      tagIds: z.array(z.number()).optional(),
       items: z.array(z.object({
         name: z.string().min(1),
         quantity: z.string().default("1"),
         unitPrice: z.string(),
         totalPrice: z.string(),
         categoryId: z.number().nullable().optional(),
+        tagIds: z.array(z.number()).optional()
       })).optional()
     });
 
@@ -67,17 +81,37 @@ export async function transactionRoutes(app: FastifyInstance) {
       userId: user.id
     }).returning();
 
+    // Tags da transação
+    if (data.tagIds && data.tagIds.length > 0) {
+      await db.insert(transactionTags).values(
+        data.tagIds.map(tId => ({
+          transactionId: created.id,
+          tagId: tId
+        }))
+      );
+    }
+
+    // Itens e tags de itens
     if (data.items && data.items.length > 0) {
-      await db.insert(transactionItems).values(
-        data.items.map(item => ({
+      for (const item of data.items) {
+        const [createdItem] = await db.insert(transactionItems).values({
           transactionId: created.id,
           name: item.name,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
           categoryId: item.categoryId || data.categoryId,
-        }))
-      );
+        }).returning();
+
+        if (item.tagIds && item.tagIds.length > 0) {
+          await db.insert(transactionItemTags).values(
+            item.tagIds.map(tId => ({
+              transactionItemId: createdItem.id,
+              tagId: tId
+            }))
+          );
+        }
+      }
     }
 
     // Atualiza saldo da conta garantindo que pertence ao usuario
@@ -95,7 +129,7 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.status(201).send(created);
   });
 
-  // Atualizar transacao do usuario (incluindo detalhamento de itens)
+  // Atualizar transacao do usuario (incluindo detalhamento de itens e tags)
   app.put("/:id", async (request, reply) => {
     const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
@@ -109,18 +143,19 @@ export async function transactionRoutes(app: FastifyInstance) {
       categoryId: z.number().nullable().optional(),
       destinationAccountId: z.number().nullable().optional(),
       notes: z.string().nullable().optional(),
+      tagIds: z.array(z.number()).optional(),
       items: z.array(z.object({
         name: z.string().min(1),
         quantity: z.string().default("1"),
         unitPrice: z.string(),
         totalPrice: z.string(),
         categoryId: z.number().nullable().optional(),
+        tagIds: z.array(z.number()).optional()
       })).optional()
     });
 
     const data = schema.parse(request.body);
 
-    // Busca transação antiga para ajustar diferença de saldo se o valor ou conta mudou
     const [oldTx] = await db.select().from(transactions)
       .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
       .limit(1);
@@ -129,7 +164,7 @@ export async function transactionRoutes(app: FastifyInstance) {
       return reply.status(404).send({ success: false, message: "Transação não encontrada." });
     }
 
-    const { items, ...txFields } = data;
+    const { items, tagIds, ...txFields } = data;
 
     const [updated] = await db.update(transactions)
       .set({
@@ -140,6 +175,19 @@ export async function transactionRoutes(app: FastifyInstance) {
       .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
       .returning();
 
+    // Sincroniza tags da transação
+    if (tagIds !== undefined) {
+      await db.delete(transactionTags).where(eq(transactionTags.transactionId, id));
+      if (tagIds.length > 0) {
+        await db.insert(transactionTags).values(
+          tagIds.map(tId => ({
+            transactionId: id,
+            tagId: tId
+          }))
+        );
+      }
+    }
+
     // Se foram enviados novos itens detalhados de compra/NF
     if (items !== undefined) {
       // Remove itens antigos (soft delete)
@@ -147,18 +195,27 @@ export async function transactionRoutes(app: FastifyInstance) {
         .set({ deletedAt: new Date() })
         .where(eq(transactionItems.transactionId, id));
 
-      // Insere os novos itens
+      // Insere os novos itens e suas tags
       if (items.length > 0) {
-        await db.insert(transactionItems).values(
-          items.map(item => ({
+        for (const item of items) {
+          const [createdItem] = await db.insert(transactionItems).values({
             transactionId: id,
             name: item.name,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
             categoryId: item.categoryId || updated.categoryId,
-          }))
-        );
+          }).returning();
+
+          if (item.tagIds && item.tagIds.length > 0) {
+            await db.insert(transactionItemTags).values(
+              item.tagIds.map(tId => ({
+                transactionItemId: createdItem.id,
+                tagId: tId
+              }))
+            );
+          }
+        }
       }
     }
 

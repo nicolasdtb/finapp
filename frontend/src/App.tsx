@@ -47,9 +47,9 @@ export function App() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (background = false) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       const [accs, cats, tgs, txs, bdgs] = await Promise.all([
         api.getAccounts(),
         api.getCategories(),
@@ -65,7 +65,7 @@ export function App() {
     } catch (err) {
       console.error("Erro ao carregar dados da API:", err);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
@@ -85,7 +85,7 @@ export function App() {
       } else {
         await api.createTransaction(data);
       }
-      await loadData();
+      await loadData(true); // reload in background
     } catch (err) {
       alert("Erro ao salvar lançamento.");
     }
@@ -94,7 +94,7 @@ export function App() {
   const handleDeleteTransaction = async (id: number) => {
     try {
       await api.deleteTransaction(id);
-      await loadData();
+      await loadData(true); // reload in background
     } catch (err) {
       alert("Erro ao excluir lançamento.");
     }
@@ -103,7 +103,7 @@ export function App() {
   const handleConfirmPending = async (tx: Transaction) => {
     try {
       await api.confirmTransaction(tx.id, {});
-      await loadData();
+      await loadData(true); // reload in background
       alert(`Transação "${tx.description}" confirmada!`);
     } catch (err) {
       alert("Erro ao confirmar transação.");
@@ -179,7 +179,7 @@ export function App() {
             transactions={transactions}
             categories={categories}
             budgets={budgets}
-            onRefreshBudgets={loadData}
+            onRefreshBudgets={() => loadData(true)}
           />
         ) : (
           <Settings 
@@ -187,7 +187,7 @@ export function App() {
             accounts={accounts}
             categories={categories}
             tags={tags}
-            onRefresh={loadData}
+            onRefresh={() => loadData(true)}
           />
         )}
       </main>
@@ -259,6 +259,7 @@ export function App() {
         onDelete={handleDeleteTransaction}
         accounts={accounts}
         categories={categories}
+        tags={tags}
         editingTransaction={editingTransaction}
       />
 

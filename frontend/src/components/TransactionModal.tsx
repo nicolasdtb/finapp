@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus, Trash2, Camera, ShoppingBag } from "lucide-react";
-import { Account, Category, Transaction, TransactionItem, api } from "../services/api.js";
+import { X, Plus, Trash2, Camera, ShoppingBag, Tag as TagIcon } from "lucide-react";
+import { Account, Category, Tag, Transaction, TransactionItem, api } from "../services/api.js";
 import { 
   formatCentsToBRL, 
   parseInputToCents, 
@@ -18,6 +18,7 @@ interface TransactionModalProps {
   onDelete?: (id: number) => Promise<void>;
   accounts: Account[];
   categories: Category[];
+  tags: Tag[];
   editingTransaction?: Transaction | null;
 }
 
@@ -28,6 +29,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onDelete,
   accounts,
   categories,
+  tags,
   editingTransaction
 }) => {
   if (!isOpen) return null;
@@ -40,6 +42,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   );
   const [accountId, setAccountId] = useState<number>(editingTransaction?.accountId || accounts[0]?.id || 1);
   const [categoryId, setCategoryId] = useState<number | undefined>(editingTransaction?.categoryId || categories[0]?.id);
+  const [tagIds, setTagIds] = useState<number[]>(editingTransaction?.tagIds || []);
   const [date, setDate] = useState(
     editingTransaction?.date 
       ? getTodayLocalDateString(new Date(editingTransaction.date)) 
@@ -54,6 +57,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [itemName, setItemName] = useState("");
   const [itemQty, setItemQty] = useState("1");
   const [itemPriceCents, setItemPriceCents] = useState<number>(0);
+  const [itemTagIds, setItemTagIds] = useState<number[]>([]);
 
   // Leitor de Nota Fiscal (QR Code)
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -106,6 +110,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       quantity: formatQuantity(qty),
       unitPrice: price.toFixed(2),
       totalPrice: total,
+      tagIds: itemTagIds.length > 0 ? itemTagIds : undefined,
     };
 
     const newItems = [...items, newItem];
@@ -118,6 +123,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setItemName("");
     setItemPriceCents(0);
     setItemQty("1");
+    setItemTagIds([]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -137,6 +143,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmountCents(decimalToCents(editingTransaction.amount));
       setAccountId(editingTransaction.accountId);
       setCategoryId(editingTransaction.categoryId);
+      setTagIds(editingTransaction.tagIds || []);
       setDate(
         editingTransaction.date 
           ? getTodayLocalDateString(new Date(editingTransaction.date)) 
@@ -151,6 +158,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmountCents(0);
       setAccountId(accounts[0]?.id || 1);
       setCategoryId(categories[0]?.id);
+      setTagIds([]);
       setDate(getTodayLocalDateString());
       setNotes("");
       setShowItems(false);
@@ -174,6 +182,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       date: localDate.toISOString(),
       accountId,
       categoryId,
+      tagIds: tagIds.length > 0 ? tagIds : undefined,
       notes,
       items: showItems ? items : undefined
     });
@@ -276,6 +285,36 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Tags</label>
+              <div className="flex flex-wrap gap-2">
+                {tags.map(t => {
+                  const isSelected = tagIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setTagIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]);
+                      }}
+                      style={{ 
+                        backgroundColor: isSelected ? t.color : 'transparent',
+                        borderColor: t.color,
+                        color: isSelected ? '#fff' : t.color
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border flex items-center gap-1 transition-all"
+                    >
+                      <TagIcon className="w-3 h-3" />
+                      {t.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Data */}
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Data</label>
@@ -321,7 +360,32 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     onChange={(e) => setItemName(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500"
                   />
-                  <div className="grid grid-cols-12 gap-2 items-center">
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {tags.map(t => {
+                        const isSelected = itemTagIds.includes(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => {
+                              setItemTagIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]);
+                            }}
+                            style={{ 
+                              backgroundColor: isSelected ? t.color : 'transparent',
+                              borderColor: t.color,
+                              color: isSelected ? '#fff' : t.color
+                            }}
+                            className="px-2 py-0.5 text-[9px] font-bold rounded-md border flex items-center gap-0.5 transition-all"
+                          >
+                            <TagIcon className="w-2.5 h-2.5" />
+                            {t.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-12 gap-2 items-center mt-2">
                     <div className="col-span-3">
                       <label className="text-[10px] text-slate-400 block mb-0.5 font-medium">Qtd</label>
                       <input
@@ -354,7 +418,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                         className="w-full h-10 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 text-xs transition"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>Adicionar</span>
+                        <span>Add</span>
                       </button>
                     </div>
                   </div>
@@ -362,24 +426,44 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
                 {/* Lista de Itens Adicionados */}
                 {items.length > 0 && (
-                  <div className="divide-y divide-slate-800 max-h-40 overflow-y-auto pt-1">
+                  <div className="divide-y divide-slate-800 max-h-40 overflow-y-auto pt-1 mt-2 border-t border-slate-800">
                     {items.map((it, idx) => (
-                      <div key={idx} className="py-2 flex justify-between items-center text-xs">
-                        <span className="text-slate-200 font-medium truncate max-w-[200px]">
-                          {formatQuantity(it.quantity)}x {it.name}
-                        </span>
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-bold text-slate-100">
-                            R$ {parseFloat(it.totalPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      <div key={idx} className="py-2 flex flex-col gap-1">
+                        <div className="flex justify-between items-start text-xs">
+                          <span className="text-slate-200 font-medium truncate flex-1 pr-2">
+                            {formatQuantity(it.quantity)}x {it.name}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-slate-100">
+                              R$ {parseFloat(it.totalPrice).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(idx)}
+                              className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
+                        {it.tagIds && it.tagIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {it.tagIds.map(tid => {
+                              const t = tags.find(tag => tag.id === tid);
+                              if (!t) return null;
+                              return (
+                                <span
+                                  key={tid}
+                                  style={{ backgroundColor: t.color + '20', color: t.color, borderColor: t.color + '40' }}
+                                  className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                                >
+                                  <TagIcon className="w-2.5 h-2.5" />
+                                  {t.name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

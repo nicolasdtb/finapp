@@ -59,6 +59,7 @@ export interface TransactionItem {
   unitPrice: string;
   totalPrice: string;
   categoryId?: number;
+  tagIds?: number[];
 }
 
 export interface Transaction {
@@ -71,6 +72,7 @@ export interface Transaction {
   accountId: number;
   destinationAccountId?: number;
   categoryId?: number;
+  tagIds?: number[];
   rawBankNotification?: string;
   notes?: string;
   items?: TransactionItem[];

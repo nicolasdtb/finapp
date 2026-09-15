@@ -102,22 +102,20 @@ export async function webhookRoutes(app: FastifyInstance) {
       });
     }
 
-    const schema = z.object({
+    const itemSchema = z.object({
       package_name: z.string().optional().default("unknown"),
       app_name: z.string().optional().default("Banco"),
       title: z.string().optional().default(""),
       text: z.string()
     });
 
-    const body = schema.parse(request.body);
-    const parsed = parseBankNotification(body.app_name, `${body.title} ${body.text}`);
+    const schema = z.union([
+      itemSchema,
+      z.array(itemSchema)
+    ]);
 
-    if (!parsed.amount) {
-      return reply.status(400).send({
-        success: false,
-        message: "Não foi possível extrair o valor da transação da notificação."
-      });
-    }
+    const body = schema.parse(request.body);
+    const notificationsList = Array.isArray(body) ? body : [body];
 
     // 2. Busca contas exclusivas deste usuário e tenta encontrar uma correspondente ao banco
     const userAccounts = await db.select().from(accounts)
@@ -130,27 +128,43 @@ export async function webhookRoutes(app: FastifyInstance) {
       });
     }
 
-    const bankNameLower = body.app_name.toLowerCase();
-    const matchedAccount = userAccounts.find(acc => 
-      acc.name.toLowerCase().includes(bankNameLower) || bankNameLower.includes(acc.name.toLowerCase())
-    ) || userAccounts[0];
+    const createdTxs: any[] = [];
 
-    // 3. Salva a transação como PENDENTE associada estritamente ao usuário
-    const [newTx] = await db.insert(transactions).values({
-      description: parsed.establishment,
-      amount: parsed.amount.toFixed(2),
-      typeId: parsed.typeId, // 1 = RECEITA (Pix recebido), 2 = DESPESA (Compra/Pix enviado)
-      statusId: 2,           // 2 = PENDING_CONFIRMATION
-      date: new Date(),
-      accountId: matchedAccount.id,
-      userId: userId,
-      rawBankNotification: `[${body.app_name}] ${body.title}: ${body.text}`
-    }).returning();
+    for (const notif of notificationsList) {
+      const parsed = parseBankNotification(notif.app_name, `${notif.title} ${notif.text}`);
+      if (!parsed.amount) continue;
+
+      const bankNameLower = notif.app_name.toLowerCase();
+      const matchedAccount = userAccounts.find(acc => 
+        acc.name.toLowerCase().includes(bankNameLower) || bankNameLower.includes(acc.name.toLowerCase())
+      ) || userAccounts[0];
+
+      // 3. Salva a transação como PENDENTE associada estritamente ao usuário
+      const [newTx] = await db.insert(transactions).values({
+        description: parsed.establishment,
+        amount: parsed.amount.toFixed(2),
+        typeId: parsed.typeId, // 1 = RECEITA (Pix recebido), 2 = DESPESA (Compra/Pix enviado)
+        statusId: 2,           // 2 = PENDING_CONFIRMATION
+        date: new Date(),
+        accountId: matchedAccount.id,
+        userId: userId,
+        rawBankNotification: `[${notif.app_name}] ${notif.title}: ${notif.text}`
+      }).returning();
+
+      createdTxs.push(newTx);
+    }
+
+    if (createdTxs.length === 0) {
+      return reply.status(400).send({
+        success: false,
+        message: "Não foi possível extrair o valor de nenhuma das notificações recebidas."
+      });
+    }
 
     return reply.status(201).send({
       success: true,
-      message: "Transação capturada com sucesso!",
-      transaction: newTx
+      message: `${createdTxs.length} transação(ões) capturada(s) com sucesso!`,
+      transactions: createdTxs
     });
   });
 }
