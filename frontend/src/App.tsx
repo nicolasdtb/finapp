@@ -174,6 +174,7 @@ export function App() {
             transactions={transactions}
             categories={categories}
             accounts={accounts}
+            tags={tags}
           />
         ) : currentView === "budgets" ? (
           <Budgets 
