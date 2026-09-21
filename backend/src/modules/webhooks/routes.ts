@@ -114,7 +114,17 @@ export async function webhookRoutes(app: FastifyInstance) {
       z.array(itemSchema)
     ]);
 
-    const body = schema.parse(request.body);
+    let body: any;
+    try {
+      body = schema.parse(request.body);
+    } catch (err) {
+      return reply.status(400).send({
+        success: false,
+        message: "Payload inválido. Esperado: objeto JSON ou array de objetos.",
+        received: typeof request.body,
+        hint: "Certifique-se de que o Content-Type é application/json e o body é um objeto ou array válido."
+      });
+    }
     const notificationsList = Array.isArray(body) ? body : [body];
 
     // 2. Busca contas exclusivas deste usuário e tenta encontrar uma correspondente ao banco
