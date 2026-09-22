@@ -150,7 +150,7 @@ export const Budgets: React.FC<BudgetsProps> = ({
       <PeriodSelector
         period={currentPeriod}
         onPrevCycle={() => setCycleOffset(prev => prev - 1)}
-        onNextCycle={() => setCycleOffset(prev => Math.min(prev + 1, 0))}
+        onNextCycle={() => setCycleOffset(prev => prev + 1)}
         onResetCurrent={() => setCycleOffset(0)}
       />
 
@@ -159,24 +159,28 @@ export const Budgets: React.FC<BudgetsProps> = ({
         <div className="flex justify-between items-center mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-emerald-400" />
-            Progresso do Ciclo
+            {cycleOffset > 0 ? "Ciclo Futuro / Planejamento" : "Progresso do Ciclo"}
           </span>
           <span className="text-xs font-bold text-slate-300">
-            Dia {cycleDaysInfo.daysPassed} de {cycleDaysInfo.totalDays} ({cycleDaysInfo.progressPercent}%)
+            {cycleOffset > 0 
+              ? `Ciclo +${cycleOffset} (Não iniciado)`
+              : `Dia ${cycleDaysInfo.daysPassed} de ${cycleDaysInfo.totalDays} (${cycleDaysInfo.progressPercent}%)`}
           </span>
         </div>
 
         <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-3">
           <div 
             className="h-full bg-emerald-500 rounded-full transition-all"
-            style={{ width: `${cycleDaysInfo.progressPercent}%` }}
+            style={{ width: `${cycleOffset > 0 ? 0 : cycleDaysInfo.progressPercent}%` }}
           />
         </div>
 
         <p className="text-[11px] text-slate-400">
-          {cycleDaysInfo.daysPassed === cycleDaysInfo.totalDays
-            ? "Ciclo encerrado. Analise os resultados abaixo."
-            : `Faltam ${cycleDaysInfo.totalDays - cycleDaysInfo.daysPassed} dias para fechar este ciclo salarial.`}
+          {cycleOffset > 0
+            ? "Você está planejando as metas para este período subsequente."
+            : cycleDaysInfo.daysPassed === cycleDaysInfo.totalDays
+              ? "Ciclo encerrado. Analise os resultados abaixo."
+              : `Faltam ${cycleDaysInfo.totalDays - cycleDaysInfo.daysPassed} dias para fechar este ciclo salarial.`}
         </p>
       </div>
 

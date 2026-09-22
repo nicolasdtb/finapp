@@ -1,4 +1,4 @@
-﻿import { Category, Transaction } from '../services/api.js';
+import { Category, Transaction } from '../services/api.js';
 
 export interface FinancialPeriod {
   startDate: Date;
@@ -85,6 +85,49 @@ export function calculateFinancialPeriods(
       );
       if (!exists) uniqueSalaryDates.push(d);
     });
+
+    // Se offsetCycles > 0, o usuário está avançando para ciclos futuros subsequentes
+    if (offsetCycles > 0) {
+      const lastSalary = uniqueSalaryDates[0];
+      // Calcula o ponto de partida do ciclo futuro com base no último salário
+      let futureStartMonth = lastSalary.getMonth() + offsetCycles;
+      let futureStartYear = lastSalary.getFullYear();
+      while (futureStartMonth > 11) {
+        futureStartMonth -= 12;
+        futureStartYear += 1;
+      }
+
+      let futureEndMonth = futureStartMonth + 1;
+      let futureEndYear = futureStartYear;
+      if (futureEndMonth > 11) {
+        futureEndMonth = 0;
+        futureEndYear += 1;
+      }
+
+      let start: Date;
+      if (offsetCycles === 1) {
+        // Primeiro ciclo subsequente: começa na estimativa do próximo salário
+        const nextMonth = lastSalary.getMonth() === 11 ? 0 : lastSalary.getMonth() + 1;
+        const nextYear = lastSalary.getMonth() === 11 ? lastSalary.getFullYear() + 1 : lastSalary.getFullYear();
+        start = getFifthBusinessDay(nextYear, nextMonth);
+      } else {
+        start = getFifthBusinessDay(futureStartYear, futureStartMonth);
+      }
+      start.setHours(0, 0, 0, 0);
+
+      const nextEst = getFifthBusinessDay(futureEndYear, futureEndMonth);
+      const end = new Date(nextEst);
+      end.setDate(end.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+
+      return {
+        startDate: start,
+        endDate: end,
+        label: formatDayMonth(start) + ' a ' + formatDayMonth(end),
+        isCurrentCycle: false,
+        cycleBasis: 'salary'
+      };
+    }
 
     const targetIdx = Math.abs(offsetCycles);
     if (targetIdx < uniqueSalaryDates.length) {
