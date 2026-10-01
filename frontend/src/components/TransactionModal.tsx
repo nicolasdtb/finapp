@@ -34,13 +34,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const [typeId, setTypeId] = useState<number>(editingTransaction?.typeId || 2); // 1: Receita, 2: Despesa
+  const [typeId, setTypeId] = useState<number>(editingTransaction?.typeId || 2); // 1: Receita, 2: Despesa, 3: Transferência
   const [description, setDescription] = useState(editingTransaction?.description || "");
   // amountCents armazena o valor em centavos inteiros (ex: 4590 para R$ 45,90)
   const [amountCents, setAmountCents] = useState<number>(
     editingTransaction?.amount ? decimalToCents(editingTransaction.amount) : 0
   );
   const [accountId, setAccountId] = useState<number>(editingTransaction?.accountId || accounts[0]?.id || 1);
+  const [destinationAccountId, setDestinationAccountId] = useState<number | undefined>(
+    editingTransaction?.destinationAccountId || accounts.find(a => a.id !== (editingTransaction?.accountId || accounts[0]?.id))?.id
+  );
   const [categoryId, setCategoryId] = useState<number | undefined>(editingTransaction?.categoryId || categories[0]?.id);
   const [tagIds, setTagIds] = useState<number[]>(editingTransaction?.tagIds || []);
   const [date, setDate] = useState(
@@ -145,6 +148,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setDescription(editingTransaction.description);
       setAmountCents(decimalToCents(editingTransaction.amount));
       setAccountId(editingTransaction.accountId);
+      setDestinationAccountId(editingTransaction.destinationAccountId || accounts.find(a => a.id !== editingTransaction.accountId)?.id);
       setCategoryId(editingTransaction.categoryId);
       setTagIds(editingTransaction.tagIds || []);
       setDate(
@@ -159,7 +163,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setTypeId(2);
       setDescription("");
       setAmountCents(0);
-      setAccountId(accounts[0]?.id || 1);
+      const firstAccId = accounts[0]?.id || 1;
+      setAccountId(firstAccId);
+      setDestinationAccountId(accounts.find(a => a.id !== firstAccId)?.id);
       setCategoryId(categories[0]?.id);
       setTagIds([]);
       setDate(getTodayLocalDateString());
@@ -173,6 +179,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     e.preventDefault();
     if (!description || amountCents <= 0) return;
 
+    if (typeId === 3 && accountId === destinationAccountId) {
+      alert("A conta de origem e de destino não podem ser iguais numa transferência.");
+      return;
+    }
+
     // Envia a data com meio-dia local (12:00:00) para evitar que o UTC recue 1 dia no fuso horário do Brasil (UTC-3)
     const [y, m, d] = date.split("-").map(Number);
     const localDate = new Date(y, m - 1, d, 12, 0, 0);
@@ -184,10 +195,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       statusId: 1,
       date: localDate.toISOString(),
       accountId,
-      categoryId,
+      destinationAccountId: typeId === 3 ? destinationAccountId : undefined,
+      categoryId: typeId === 3 ? undefined : categoryId,
       tagIds: tagIds.length > 0 ? tagIds : undefined,
       notes,
-      items: showItems ? items : undefined
+      items: showItems && typeId !== 3 ? items : undefined
     });
     onClose();
   };
@@ -204,8 +216,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </button>
         </div>
 
-        {/* Tipo: Despesa ou Receita */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl mb-5 border border-slate-800">
+        {/* Tipo: Despesa, Receita ou Transferência */}
+        <div className="grid grid-cols-3 gap-2 bg-slate-950 p-1.5 rounded-2xl mb-5 border border-slate-800">
           <button
             type="button"
             onClick={() => setTypeId(2)}
@@ -223,6 +235,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             }`}
           >
             Receita
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTypeId(3);
+              if (!description || description === "Nova Despesa" || description === "Nova Receita") {
+                setDescription("Transferência entre contas");
+              }
+            }}
+            className={`py-2 text-xs font-bold rounded-xl transition ${
+              typeId === 3 ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Transferência
           </button>
         </div>
 
@@ -250,43 +276,79 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             <input
               type="text"
               required
-              placeholder="Ex: Supermercado Carrefour, Salário, Gasolina"
+              placeholder={typeId === 3 ? "Ex: Transferência Inter para Nubank" : "Ex: Supermercado Carrefour, Salário"}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
             />
           </div>
 
-          {/* Conta / Cartão */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Conta / Cartão</label>
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
-              >
-                {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
-              </select>
-            </div>
+          {/* Seletor de Contas: Origem e Destino para Transferência OU Conta e Categoria para Despesa/Receita */}
+          {typeId === 3 ? (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/70 border border-blue-500/20 rounded-2xl">
+              <div>
+                <label className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider block mb-1">
+                  De (Origem)
+                </label>
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Categoria */}
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Categoria</label>
-              <select
-                value={categoryId ?? ""}
-                onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="">Sem categoria</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+              <div>
+                <label className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block mb-1">
+                  Para (Destino)
+                </label>
+                <select
+                  value={destinationAccountId || ""}
+                  onChange={(e) => setDestinationAccountId(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                >
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id} disabled={acc.id === accountId}>
+                      {acc.name} {acc.id === accountId ? "(origem)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Conta / Cartão</label>
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Categoria */}
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Categoria</label>
+                <select
+                  value={categoryId ?? ""}
+                  onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Sem categoria</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Tags */}
           {tags.length > 0 && (

@@ -124,6 +124,15 @@ export async function transactionRoutes(app: FastifyInstance) {
       await db.update(accounts)
         .set({ balance: sql`${accounts.balance} - ${amountNum}` })
         .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
+    } else if (data.typeId === 3 && data.destinationAccountId) {
+      // Transferência entre contas: subtrai da origem e soma no destino
+      await db.update(accounts)
+        .set({ balance: sql`${accounts.balance} - ${amountNum}` })
+        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
+
+      await db.update(accounts)
+        .set({ balance: sql`${accounts.balance} + ${amountNum}` })
+        .where(and(eq(accounts.id, data.destinationAccountId), eq(accounts.userId, user.id)));
     }
 
     return reply.status(201).send(created);
@@ -228,63 +237,60 @@ export async function transactionRoutes(app: FastifyInstance) {
     const newType = updated.typeId;
     const oldAccId = oldTx.accountId;
     const newAccId = updated.accountId;
+    const oldDestId = oldTx.destinationAccountId;
+    const newDestId = updated.destinationAccountId;
+
+    // Helper: reverter saldo de uma transação confirmada
+    const revertConfirmedTxBalance = async (type: number, amount: number, srcId: number, dstId: number | null | undefined) => {
+      if (type === 1) {
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+      } else if (type === 2) {
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+      } else if (type === 3 && dstId) {
+        // Estorno de transferência: devolve na origem e tira do destino
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amount}` })
+          .where(and(eq(accounts.id, dstId), eq(accounts.userId, user.id)));
+      }
+    };
+
+    // Helper: aplicar saldo de uma transação confirmada
+    const applyConfirmedTxBalance = async (type: number, amount: number, srcId: number, dstId: number | null | undefined) => {
+      if (type === 1) {
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+      } else if (type === 2) {
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+      } else if (type === 3 && dstId) {
+        // Aplicação de transferência: tira da origem e credita no destino
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amount}` })
+          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amount}` })
+          .where(and(eq(accounts.id, dstId), eq(accounts.userId, user.id)));
+      }
+    };
 
     // Caso 1: Transação era PENDENTE (2) e agora foi CONFIRMADA (1)
     if (oldStatus === 2 && newStatus === 1) {
-      if (newType === 1) {
-        // Receita confirmada -> credita saldo
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${newAmount}` })
-          .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-      } else if (newType === 2) {
-        // Despesa confirmada -> debita saldo
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${newAmount}` })
-          .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-      }
+      await applyConfirmedTxBalance(newType, newAmount, newAccId, newDestId);
     } 
     // Caso 2: Transação já era CONFIRMADA (1) e continuou CONFIRMADA (1)
     else if (oldStatus === 1 && newStatus === 1) {
-      // Se mudou de conta ou de tipo ou de valor, estorna o anterior e aplica o novo
-      if (oldAccId !== newAccId || oldType !== newType) {
-        // Estorna na conta antiga
-        if (oldType === 1) {
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} - ${oldAmount}` })
-            .where(and(eq(accounts.id, oldAccId), eq(accounts.userId, user.id)));
-        } else if (oldType === 2) {
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} + ${oldAmount}` })
-            .where(and(eq(accounts.id, oldAccId), eq(accounts.userId, user.id)));
-        }
-
-        // Aplica na conta nova
-        if (newType === 1) {
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} + ${newAmount}` })
-            .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-        } else if (newType === 2) {
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} - ${newAmount}` })
-            .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-        }
-      } else {
-        // Mesma conta e mesmo tipo: apenas ajusta a diferença de valor se mudou
-        const diff = newAmount - oldAmount;
-        if (diff !== 0) {
-          if (newType === 1) {
-            // Receita aumentou -> soma diferença
-            await db.update(accounts)
-              .set({ balance: sql`${accounts.balance} + ${diff}` })
-              .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-          } else if (newType === 2) {
-            // Despesa aumentou -> subtrai diferença
-            await db.update(accounts)
-              .set({ balance: sql`${accounts.balance} - ${diff}` })
-              .where(and(eq(accounts.id, newAccId), eq(accounts.userId, user.id)));
-          }
-        }
-      }
+      // Reverte o estado antigo e aplica o novo de forma limpa
+      await revertConfirmedTxBalance(oldType, oldAmount, oldAccId, oldDestId);
+      await applyConfirmedTxBalance(newType, newAmount, newAccId, newDestId);
     }
 
     return reply.send(updated);
@@ -313,6 +319,14 @@ export async function transactionRoutes(app: FastifyInstance) {
           await db.update(accounts)
             .set({ balance: sql`${accounts.balance} + ${amountNum}` })
             .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
+        } else if (tx.typeId === 3 && tx.destinationAccountId) {
+          // Estorno de transferência: devolve na origem e tira do destino
+          await db.update(accounts)
+            .set({ balance: sql`${accounts.balance} + ${amountNum}` })
+            .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
+          await db.update(accounts)
+            .set({ balance: sql`${accounts.balance} - ${amountNum}` })
+            .where(and(eq(accounts.id, tx.destinationAccountId), eq(accounts.userId, user.id)));
         }
       }
 
@@ -336,6 +350,8 @@ export async function transactionRoutes(app: FastifyInstance) {
     const schema = z.object({
       categoryId: z.number().optional(),
       accountId: z.number().optional(),
+      destinationAccountId: z.number().optional(),
+      typeId: z.number().optional(),
       description: z.string().optional()
     });
 
@@ -371,6 +387,14 @@ export async function transactionRoutes(app: FastifyInstance) {
         await db.update(accounts)
           .set({ balance: sql`${accounts.balance} - ${amountNum}` })
           .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
+      } else if (updated.typeId === 3 && updated.destinationAccountId) {
+        // Transferência confirmada
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} - ${amountNum}` })
+          .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
+        await db.update(accounts)
+          .set({ balance: sql`${accounts.balance} + ${amountNum}` })
+          .where(and(eq(accounts.id, updated.destinationAccountId), eq(accounts.userId, user.id)));
       }
     }
 

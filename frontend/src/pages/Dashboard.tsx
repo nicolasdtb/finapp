@@ -12,7 +12,8 @@ import {
   Search,
   Filter,
   X,
-  Tag as TagIcon
+  Tag as TagIcon,
+  ArrowLeftRight
 } from "lucide-react";
 import { Transaction, Account, Category, Tag } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
@@ -426,13 +427,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl ${
-                    t.typeId === 1 ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                    t.typeId === 1 
+                      ? "bg-emerald-500/20 text-emerald-400" 
+                      : t.typeId === 3
+                        ? "bg-blue-500/20 text-blue-400"
+                        : "bg-rose-500/20 text-rose-400"
                   }`}>
-                    {t.typeId === 1 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                    {t.typeId === 1 ? (
+                      <ArrowUpRight className="w-4 h-4" />
+                    ) : t.typeId === 3 ? (
+                      <ArrowLeftRight className="w-4 h-4" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4" />
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-semibold text-slate-100">{t.description}</h4>
+                      {t.typeId === 3 && (
+                        <span className="text-[10px] bg-blue-500/15 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-medium">
+                          Transferência
+                        </span>
+                      )}
                       {t.items && t.items.length > 0 && (
                         <span className="flex items-center gap-1 text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
                           <Receipt className="w-3 h-3" />
@@ -470,9 +486,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 <div className="text-right">
                   <span className={`text-sm font-bold ${
-                    t.typeId === 1 ? "text-emerald-400" : "text-slate-100"
+                    t.typeId === 1 
+                      ? "text-emerald-400" 
+                      : t.typeId === 3 
+                        ? "text-blue-400" 
+                        : "text-slate-100"
                   }`}>
-                    {t.typeId === 1 ? "+" : "-"} R$ {parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {t.typeId === 1 ? "+" : t.typeId === 3 ? "⇄" : "-"} R$ {parseFloat(t.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </span>
                   {t.statusId === 2 && (
                     <p className="text-[10px] text-amber-400 font-medium">Toque p/ aprovar</p>
