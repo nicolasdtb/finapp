@@ -103,20 +103,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .sort(sortByNewestFirst);
   }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
 
+  // Transações confirmadas filtradas por busca, categoria, conta, tag E pelo período/ciclo selecionado
   const confirmedTransactions = useMemo(() => {
     return transactions
       .filter(t => t.statusId === 1)
+      .filter(t => {
+        const d = new Date(t.date);
+        return d >= currentPeriod.startDate && d <= currentPeriod.endDate;
+      })
       .filter(matchesSearchAndFilter)
       .sort(sortByNewestFirst);
-  }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
+  }, [transactions, currentPeriod, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
 
-  // Filtra transações que caem exatamente dentro do ciclo financeiro selecionado
-  const cycleTransactions = useMemo(() => {
-    return confirmedTransactions.filter(t => {
-      const d = new Date(t.date);
-      return d >= currentPeriod.startDate && d <= currentPeriod.endDate;
-    });
-  }, [confirmedTransactions, currentPeriod]);
+  // Transações confirmadas dentro do ciclo ativo (usadas para o totalizador de Receitas/Despesas)
+  const cycleTransactions = confirmedTransactions;
 
   const currentMonthExpenses = cycleTransactions
     .filter(t => t.typeId === 2)
@@ -147,7 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <PeriodSelector
         period={currentPeriod}
         onPrevCycle={() => setCycleOffset(prev => prev - 1)}
-        onNextCycle={() => setCycleOffset(prev => Math.min(prev + 1, 0))}
+        onNextCycle={() => setCycleOffset(prev => prev + 1)}
         onResetCurrent={() => setCycleOffset(0)}
       />
 

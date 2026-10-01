@@ -159,7 +159,7 @@ export const Reports: React.FC<ReportsProps> = ({ transactions, categories, acco
       <PeriodSelector
         period={currentPeriod}
         onPrevCycle={() => setCycleOffset(prev => prev - 1)}
-        onNextCycle={() => setCycleOffset(prev => Math.min(prev + 1, 0))}
+        onNextCycle={() => setCycleOffset(prev => prev + 1)}
         onResetCurrent={() => setCycleOffset(0)}
       />
 
