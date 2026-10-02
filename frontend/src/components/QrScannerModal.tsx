@@ -134,7 +134,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
           </div>
         )}
 
-        {/* Botão para Entrada Manual */}
+        {/* Botão para Entrada Manual de Link */}
         <div className="mt-4">
           <button
             type="button"
@@ -142,15 +142,15 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
             className="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition"
           >
             <Link className="w-3.5 h-3.5 text-blue-400" />
-            {showManualInput ? "Ocultar entrada manual" : "Colar URL ou Chave da Nota manualmente"}
+            {showManualInput ? "Ocultar entrada manual" : "Colar link do QR Code manualmente"}
           </button>
 
           {showManualInput && (
             <form onSubmit={handleManualSubmit} className="mt-2 space-y-2">
               <input
-                type="text"
+                type="url"
                 required
-                placeholder="Cole a URL ou a chave de 44 dígitos da nota..."
+                placeholder="Cole o link completo do QR Code da nota (https://...)..."
                 value={manualUrl}
                 onChange={(e) => setManualUrl(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
@@ -166,7 +166,7 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
                     <span>Processando Nota...</span>
                   </>
                 ) : (
-                  <span>Consultar Nota Fiscal</span>
+                  <span>Processar Link da Nota</span>
                 )}
               </button>
             </form>

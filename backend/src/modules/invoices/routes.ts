@@ -43,22 +43,18 @@ export async function invoiceRoutes(app: FastifyInstance) {
     let input = parsed.data.url.trim();
     let targetUrl = input;
 
-    // Se for uma chave de acesso de 44 dígitos (numérica pura ou com espaços/traços)
     const cleanedDigits = input.replace(/\D/g, "");
-    const isRawKey = cleanedDigits.length === 44;
-
-    if (isRawKey) {
-      // Portais da SEFAZ exigem um hash criptográfico (CSC) que só existe no QR Code
-      // gerado pelo emissor da nota. Sem esse hash, qualquer consulta por chave pura
-      // retorna erro 902 ("Parâmetros informados inválidos") ou exige CAPTCHA.
-      // Não há API pública oficial que aceite apenas os 44 dígitos sem autenticação.
-      return reply.status(422).send({
+    if (cleanedDigits.length === 44 && !input.startsWith("http")) {
+      return reply.status(400).send({
         success: false,
-        qrCodeRequired: true,
-        message:
-          "A consulta por chave de acesso não é mais suportada pelos portais da SEFAZ — " +
-          "eles passaram a exigir um código de autenticação (CSC) que só existe dentro do QR Code " +
-          "impresso no cupom fiscal. Use a câmera para escanear o QR Code da nota.",
+        message: "A SEFAZ desativou consultas públicas por chave manual sem certificado digital. Escaneie diretamente o QR Code impresso no cupom com a câmera.",
+      });
+    }
+
+    if (!input.startsWith("http://") && !input.startsWith("https://")) {
+      return reply.status(400).send({
+        success: false,
+        message: "Por favor, informe uma URL válida do QR Code da NFC-e ou use a câmera para escanear.",
       });
     }
 
