@@ -45,31 +45,21 @@ export async function invoiceRoutes(app: FastifyInstance) {
 
     // Se for uma chave de acesso de 44 dígitos (numérica pura ou com espaços/traços)
     const cleanedDigits = input.replace(/\D/g, "");
-    if (cleanedDigits.length === 44) {
-      const ufCode = cleanedDigits.substring(0, 2);
-      switch (ufCode) {
-        case "43": // Rio Grande do Sul
-          targetUrl = `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=${cleanedDigits}|2|1|1`;
-          break;
-        case "35": // São Paulo
-          targetUrl = `https://www.nfce.fazenda.sp.gov.br/NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx?p=${cleanedDigits}`;
-          break;
-        case "41": // Paraná
-          targetUrl = `http://www.fazenda.pr.gov.br/nfce/qrcode?p=${cleanedDigits}|2|1|1`;
-          break;
-        case "31": // Minas Gerais
-          targetUrl = `https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/consultaarg.xhtml?p=${cleanedDigits}`;
-          break;
-        case "33": // Rio de Janeiro
-          targetUrl = `http://www.fazenda.rj.gov.br/actrnfce/qrcode?p=${cleanedDigits}|2|1|1`;
-          break;
-        case "42": // Santa Catarina
-          targetUrl = `https://sat.sef.sc.gov.br/nfce/consulta?p=${cleanedDigits}|2|1|1`;
-          break;
-        default: // Fallback padrão SEFAZ RS / SVRS
-          targetUrl = `https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=${cleanedDigits}|2|1|1`;
-          break;
-      }
+    const isRawKey = cleanedDigits.length === 44;
+
+    if (isRawKey) {
+      // Portais da SEFAZ exigem um hash criptográfico (CSC) que só existe no QR Code
+      // gerado pelo emissor da nota. Sem esse hash, qualquer consulta por chave pura
+      // retorna erro 902 ("Parâmetros informados inválidos") ou exige CAPTCHA.
+      // Não há API pública oficial que aceite apenas os 44 dígitos sem autenticação.
+      return reply.status(422).send({
+        success: false,
+        qrCodeRequired: true,
+        message:
+          "A consulta por chave de acesso não é mais suportada pelos portais da SEFAZ — " +
+          "eles passaram a exigir um código de autenticação (CSC) que só existe dentro do QR Code " +
+          "impresso no cupom fiscal. Use a câmera para escanear o QR Code da nota.",
+      });
     }
 
     app.log.info({ originalInput: input, targetUrl }, "Iniciando consulta de Nota Fiscal SEFAZ");
@@ -103,7 +93,7 @@ export async function invoiceRoutes(app: FastifyInstance) {
         if (fallbackName && fallbackName.length < 50) {
           storeName = fallbackName;
         } else {
-          storeName = "Compra Vevalecimento";
+          storeName = "Compra no Estabelecimento";
         }
       }
 

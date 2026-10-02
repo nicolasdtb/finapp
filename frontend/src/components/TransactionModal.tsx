@@ -69,9 +69,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isScanningInvoice, setIsScanningInvoice] = useState(false);
 
+  const [invoiceScanError, setInvoiceScanError] = useState<string | null>(null);
+
   const handleScanInvoice = async (url: string) => {
     try {
       setIsScanningInvoice(true);
+      setInvoiceScanError(null);
       const res = await api.parseInvoice(url);
 
       if (res.success && res.data) {
@@ -95,6 +98,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         }
 
         setIsScannerOpen(false);
+      } else if ((res as any).qrCodeRequired) {
+        // Chave pura de 44 dígitos — portais da SEFAZ exigem o QR Code real
+        setInvoiceScanError(res.message || "Use a câmera para escanear o QR Code da nota.");
       } else {
         alert(res.message || "Não foi possível extrair os produtos desta nota.");
       }
@@ -104,6 +110,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setIsScanningInvoice(false);
     }
   };
+
 
   const handleAddItem = () => {
     if (!itemName || itemPriceCents <= 0) return;
@@ -647,9 +654,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       {/* Modal Leitor de QR Code / NFC-e */}
       <QrScannerModal
         isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
+        onClose={() => { setIsScannerOpen(false); setInvoiceScanError(null); }}
         onScanSuccess={handleScanInvoice}
         isLoading={isScanningInvoice}
+        scanError={invoiceScanError}
       />
     </div>
   );

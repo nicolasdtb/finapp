@@ -7,13 +7,15 @@ interface QrScannerModalProps {
   onClose: () => void;
   onScanSuccess: (url: string) => void;
   isLoading: boolean;
+  scanError?: string | null;
 }
 
 export const QrScannerModal: React.FC<QrScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
-  isLoading
+  isLoading,
+  scanError
 }) => {
   if (!isOpen) return null;
 
@@ -123,6 +125,14 @@ export const QrScannerModal: React.FC<QrScannerModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* Aviso de erro ou exigência de QR Code */}
+        {scanError && (
+          <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-start gap-2.5 text-amber-300">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+            <p className="text-xs leading-relaxed">{scanError}</p>
+          </div>
+        )}
 
         {/* Botão para Entrada Manual */}
         <div className="mt-4">
