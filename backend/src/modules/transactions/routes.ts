@@ -4,6 +4,37 @@ import { db } from "../../database/index.js";
 import { transactions, transactionItems, transactionTags, transactionItemTags, accounts, categories, tags } from "../../database/schema.js";
 import { desc, eq, isNull, sql, and, inArray } from "drizzle-orm";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+interface BalanceEffect {
+  typeId: number;
+  amount: string;
+  accountId: number;
+  destinationAccountId?: number | null;
+}
+
+// Soma (direction = 1) ou desfaz (direction = -1) o efeito de um lancamento CONFIRMADO
+// no saldo das contas. Usa o valor como texto (numeric) para evitar erro de ponto flutuante.
+async function applyBalanceEffect(tx: Tx, userId: number, t: BalanceEffect, direction: 1 | -1) {
+  const move = async (accountId: number, sign: 1 | -1) => {
+    const delta = sql`${accounts.balance} + ${t.amount}::numeric`;
+    const inverse = sql`${accounts.balance} - ${t.amount}::numeric`;
+    await tx.update(accounts)
+      .set({ balance: sign * direction === 1 ? delta : inverse })
+      .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)));
+  };
+
+  if (t.typeId === 1) {
+    await move(t.accountId, 1);
+  } else if (t.typeId === 2) {
+    await move(t.accountId, -1);
+  } else if (t.typeId === 3 && t.destinationAccountId) {
+    // Transferencia: sai da origem e entra no destino
+    await move(t.accountId, -1);
+    await move(t.destinationAccountId, 1);
+  }
+}
+
 export async function transactionRoutes(app: FastifyInstance) {
   // Hook de autenticacao obrigatoria
   app.addHook("preHandler", async (request, reply) => {
@@ -68,72 +99,53 @@ export async function transactionRoutes(app: FastifyInstance) {
 
     const data = schema.parse(request.body);
 
-    const [created] = await db.insert(transactions).values({
-      description: data.description,
-      amount: data.amount,
-      typeId: data.typeId,
-      statusId: data.statusId,
-      date: new Date(data.date),
-      accountId: data.accountId,
-      categoryId: data.categoryId,
-      destinationAccountId: data.destinationAccountId,
-      notes: data.notes,
-      userId: user.id
-    }).returning();
+    // Tudo ou nada: lancamento, itens, tags e saldo na mesma transacao do banco.
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(transactions).values({
+        description: data.description,
+        amount: data.amount,
+        typeId: data.typeId,
+        statusId: data.statusId,
+        date: new Date(data.date),
+        accountId: data.accountId,
+        categoryId: data.categoryId,
+        destinationAccountId: data.destinationAccountId,
+        notes: data.notes,
+        userId: user.id
+      }).returning();
 
-    // Tags da transação
-    if (data.tagIds && data.tagIds.length > 0) {
-      await db.insert(transactionTags).values(
-        data.tagIds.map(tId => ({
-          transactionId: created.id,
-          tagId: tId
-        }))
-      );
-    }
+      if (data.tagIds && data.tagIds.length > 0) {
+        await tx.insert(transactionTags).values(
+          data.tagIds.map(tId => ({ transactionId: row.id, tagId: tId }))
+        );
+      }
 
-    // Itens e tags de itens
-    if (data.items && data.items.length > 0) {
-      for (const item of data.items) {
-        const [createdItem] = await db.insert(transactionItems).values({
-          transactionId: created.id,
-          name: item.name,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          categoryId: item.categoryId || data.categoryId,
-        }).returning();
+      if (data.items && data.items.length > 0) {
+        for (const item of data.items) {
+          const [createdItem] = await tx.insert(transactionItems).values({
+            transactionId: row.id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            categoryId: item.categoryId || data.categoryId,
+          }).returning();
 
-        if (item.tagIds && item.tagIds.length > 0) {
-          await db.insert(transactionItemTags).values(
-            item.tagIds.map(tId => ({
-              transactionItemId: createdItem.id,
-              tagId: tId
-            }))
-          );
+          if (item.tagIds && item.tagIds.length > 0) {
+            await tx.insert(transactionItemTags).values(
+              item.tagIds.map(tId => ({ transactionItemId: createdItem.id, tagId: tId }))
+            );
+          }
         }
       }
-    }
 
-    // Atualiza saldo da conta garantindo que pertence ao usuario
-    const amountNum = parseFloat(data.amount);
-    if (data.typeId === 1) {
-      await db.update(accounts)
-        .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
-    } else if (data.typeId === 2) {
-      await db.update(accounts)
-        .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
-    } else if (data.typeId === 3 && data.destinationAccountId) {
-      // Transferência entre contas: subtrai da origem e soma no destino
-      await db.update(accounts)
-        .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)));
+      // Saldo so muda para lancamento CONFIRMADO (pendente nao mexe no saldo)
+      if (row.statusId === 1) {
+        await applyBalanceEffect(tx, user.id, row, 1);
+      }
 
-      await db.update(accounts)
-        .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-        .where(and(eq(accounts.id, data.destinationAccountId), eq(accounts.userId, user.id)));
-    }
+      return row;
+    });
 
     return reply.status(201).send(created);
   });
@@ -164,135 +176,75 @@ export async function transactionRoutes(app: FastifyInstance) {
     });
 
     const data = schema.parse(request.body);
-
-    const [oldTx] = await db.select().from(transactions)
-      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-      .limit(1);
-
-    if (!oldTx) {
-      return reply.status(404).send({ success: false, message: "Transação não encontrada." });
-    }
-
     const { items, tagIds, ...txFields } = data;
 
-    const [updated] = await db.update(transactions)
-      .set({
-        ...txFields,
-        date: txFields.date ? new Date(txFields.date) : undefined,
-        updatedAt: new Date()
-      })
-      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      // FOR UPDATE: trava a linha para duas edicoes simultaneas nao se atropelarem
+      const [oldTx] = await tx.select().from(transactions)
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id), isNull(transactions.deletedAt)))
+        .limit(1)
+        .for("update");
 
-    // Sincroniza tags da transação
-    if (tagIds !== undefined) {
-      await db.delete(transactionTags).where(eq(transactionTags.transactionId, id));
-      if (tagIds.length > 0) {
-        await db.insert(transactionTags).values(
-          tagIds.map(tId => ({
-            transactionId: id,
-            tagId: tId
-          }))
-        );
+      if (!oldTx) return null;
+
+      const [row] = await tx.update(transactions)
+        .set({
+          ...txFields,
+          date: txFields.date ? new Date(txFields.date) : undefined,
+          updatedAt: new Date()
+        })
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
+        .returning();
+
+      if (tagIds !== undefined) {
+        await tx.delete(transactionTags).where(eq(transactionTags.transactionId, id));
+        if (tagIds.length > 0) {
+          await tx.insert(transactionTags).values(
+            tagIds.map(tId => ({ transactionId: id, tagId: tId }))
+          );
+        }
       }
-    }
 
-    // Se foram enviados novos itens detalhados de compra/NF
-    if (items !== undefined) {
-      // Remove itens antigos (soft delete)
-      await db.update(transactionItems)
-        .set({ deletedAt: new Date() })
-        .where(eq(transactionItems.transactionId, id));
+      if (items !== undefined) {
+        await tx.update(transactionItems)
+          .set({ deletedAt: new Date() })
+          .where(eq(transactionItems.transactionId, id));
 
-      // Insere os novos itens e suas tags
-      if (items.length > 0) {
         for (const item of items) {
-          const [createdItem] = await db.insert(transactionItems).values({
+          const [createdItem] = await tx.insert(transactionItems).values({
             transactionId: id,
             name: item.name,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
-            categoryId: item.categoryId || updated.categoryId,
+            categoryId: item.categoryId || row.categoryId,
           }).returning();
 
           if (item.tagIds && item.tagIds.length > 0) {
-            await db.insert(transactionItemTags).values(
-              item.tagIds.map(tId => ({
-                transactionItemId: createdItem.id,
-                tagId: tId
-              }))
+            await tx.insert(transactionItemTags).values(
+              item.tagIds.map(tId => ({ transactionItemId: createdItem.id, tagId: tId }))
             );
           }
         }
       }
-    }
 
-    // Ajuste de saldo na conta:
-    const oldStatus = oldTx.statusId;
-    const newStatus = updated.statusId;
-    const oldAmount = parseFloat(oldTx.amount);
-    const newAmount = parseFloat(updated.amount);
-    const oldType = oldTx.typeId;
-    const newType = updated.typeId;
-    const oldAccId = oldTx.accountId;
-    const newAccId = updated.accountId;
-    const oldDestId = oldTx.destinationAccountId;
-    const newDestId = updated.destinationAccountId;
-
-    // Helper: reverter saldo de uma transação confirmada
-    const revertConfirmedTxBalance = async (type: number, amount: number, srcId: number, dstId: number | null | undefined) => {
-      if (type === 1) {
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-      } else if (type === 2) {
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-      } else if (type === 3 && dstId) {
-        // Estorno de transferência: devolve na origem e tira do destino
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amount}` })
-          .where(and(eq(accounts.id, dstId), eq(accounts.userId, user.id)));
+      // Saldo: desfaz o efeito antigo se ele estava confirmado e aplica o novo se ficou confirmado.
+      //   pendente -> confirmado : aplica o novo
+      //   confirmado -> confirmado: desfaz o antigo e aplica o novo
+      //   confirmado -> pendente : desfaz o antigo
+      if (oldTx.statusId === 1) {
+        await applyBalanceEffect(tx, user.id, oldTx, -1);
       }
-    };
-
-    // Helper: aplicar saldo de uma transação confirmada
-    const applyConfirmedTxBalance = async (type: number, amount: number, srcId: number, dstId: number | null | undefined) => {
-      if (type === 1) {
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-      } else if (type === 2) {
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-      } else if (type === 3 && dstId) {
-        // Aplicação de transferência: tira da origem e credita no destino
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amount}` })
-          .where(and(eq(accounts.id, srcId), eq(accounts.userId, user.id)));
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amount}` })
-          .where(and(eq(accounts.id, dstId), eq(accounts.userId, user.id)));
+      if (row.statusId === 1) {
+        await applyBalanceEffect(tx, user.id, row, 1);
       }
-    };
 
-    // Caso 1: Transação era PENDENTE (2) e agora foi CONFIRMADA (1)
-    if (oldStatus === 2 && newStatus === 1) {
-      await applyConfirmedTxBalance(newType, newAmount, newAccId, newDestId);
-    } 
-    // Caso 2: Transação já era CONFIRMADA (1) e continuou CONFIRMADA (1)
-    else if (oldStatus === 1 && newStatus === 1) {
-      // Reverte o estado antigo e aplica o novo de forma limpa
-      await revertConfirmedTxBalance(oldType, oldAmount, oldAccId, oldDestId);
-      await applyConfirmedTxBalance(newType, newAmount, newAccId, newDestId);
+      return row;
+    });
+
+    if (!updated) {
+      return reply.status(404).send({ success: false, message: "Transação não encontrada." });
     }
-
     return reply.send(updated);
   });
 
@@ -301,44 +253,27 @@ export async function transactionRoutes(app: FastifyInstance) {
     const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
 
-    const [tx] = await db.select().from(transactions)
-      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-      .limit(1);
+    await db.transaction(async (tx) => {
+      const [found] = await tx.select().from(transactions)
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
+        .limit(1)
+        .for("update");
 
-    if (tx) {
-      // Só estorna saldo na conta se a transação estivesse CONFIRMADA (statusId === 1)
-      if (tx.statusId === 1) {
-        const amountNum = parseFloat(tx.amount);
-        if (tx.typeId === 1) {
-          // Estorno de receita: subtrai do saldo
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-            .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
-        } else if (tx.typeId === 2) {
-          // Estorno de despesa: devolve para a conta
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-            .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
-        } else if (tx.typeId === 3 && tx.destinationAccountId) {
-          // Estorno de transferência: devolve na origem e tira do destino
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-            .where(and(eq(accounts.id, tx.accountId), eq(accounts.userId, user.id)));
-          await db.update(accounts)
-            .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-            .where(and(eq(accounts.id, tx.destinationAccountId), eq(accounts.userId, user.id)));
-        }
+      // Ja excluida (ou inexistente): nao estorna de novo
+      if (!found || found.deletedAt) return;
+
+      if (found.statusId === 1) {
+        await applyBalanceEffect(tx, user.id, found, -1);
       }
 
-      // Marca como deletado
-      await db.update(transactions)
+      await tx.update(transactions)
         .set({ deletedAt: new Date() })
         .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
 
-      await db.update(transactionItems)
+      await tx.update(transactionItems)
         .set({ deletedAt: new Date() })
         .where(eq(transactionItems.transactionId, id));
-    }
+    });
 
     return reply.send({ success: true, message: "Transação excluída (soft delete)" });
   });
@@ -354,50 +289,33 @@ export async function transactionRoutes(app: FastifyInstance) {
       typeId: z.number().optional(),
       description: z.string().optional()
     });
+    const updates = schema.parse(request.body);
 
-    const [oldTx] = await db.select().from(transactions)
-      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-      .limit(1);
+    const updated = await db.transaction(async (tx) => {
+      // FOR UPDATE: dois toques em "confirmar" ao mesmo tempo nao aplicam o saldo duas vezes
+      const [oldTx] = await tx.select().from(transactions)
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id), isNull(transactions.deletedAt)))
+        .limit(1)
+        .for("update");
 
-    if (!oldTx) {
+      if (!oldTx) return null;
+
+      const [row] = await tx.update(transactions)
+        .set({ ...updates, statusId: 1, updatedAt: new Date() })
+        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
+        .returning();
+
+      // So mexe no saldo se estava pendente
+      if (oldTx.statusId === 2) {
+        await applyBalanceEffect(tx, user.id, row, 1);
+      }
+
+      return row;
+    });
+
+    if (!updated) {
       return reply.status(404).send({ success: false, message: "Transação não encontrada." });
     }
-
-    const updates = schema.parse(request.body);
-    const [updated] = await db.update(transactions)
-      .set({
-        ...updates,
-        statusId: 1,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)))
-      .returning();
-
-    // Se estava pendente e agora foi confirmada, atualiza o saldo da conta
-    if (oldTx.statusId === 2) {
-      const amountNum = parseFloat(updated.amount);
-      const accId = updated.accountId;
-      if (updated.typeId === 1) {
-        // Receita Pix / Depósito -> adiciona ao saldo
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-          .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
-      } else if (updated.typeId === 2) {
-        // Despesa / Compra no cartão ou débito -> subtrai do saldo
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-          .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
-      } else if (updated.typeId === 3 && updated.destinationAccountId) {
-        // Transferência confirmada
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} - ${amountNum}` })
-          .where(and(eq(accounts.id, accId), eq(accounts.userId, user.id)));
-        await db.update(accounts)
-          .set({ balance: sql`${accounts.balance} + ${amountNum}` })
-          .where(and(eq(accounts.id, updated.destinationAccountId), eq(accounts.userId, user.id)));
-      }
-    }
-
     return reply.send(updated);
   });
 }
