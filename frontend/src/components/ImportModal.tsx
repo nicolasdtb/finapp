@@ -12,6 +12,7 @@ import {
   Filter
 } from "lucide-react";
 import { Account, Category, StatementItem, StatementParseResult, api } from "../services/api.js";
+import { useToast } from "./Feedback.js";
 
 interface ImportModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   categories,
   onImportSuccess
 }) => {
+  const toast = useToast();
   const [step, setStep] = useState<"upload" | "preview">("upload");
   const [selectedAccountId, setSelectedAccountId] = useState<number>(accounts[0]?.id || 0);
   const [file, setFile] = useState<File | null>(null);
@@ -70,12 +72,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
   const handleProcessFile = async () => {
     if (!fileContent) {
-      alert("Por favor selecione um arquivo de extrato válido.");
+      toast.error("Por favor selecione um arquivo de extrato válido.");
       return;
     }
     const targetAccountId = selectedAccountId || accounts[0]?.id;
     if (!targetAccountId) {
-      alert("Por favor selecione a conta de destino.");
+      toast.error("Por favor selecione a conta de destino.");
       return;
     }
 
@@ -83,7 +85,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       setLoading(true);
       const res = await api.parseStatement(targetAccountId, fileContent, fileName);
       if (!res.success || !res.data) {
-        alert(res.message || "Erro ao processar arquivo de extrato.");
+        toast.error(res.message || "Erro ao processar arquivo de extrato.");
         return;
       }
 
@@ -97,7 +99,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       setItems(selectable);
       setStep("preview");
     } catch (err: any) {
-      alert("Erro ao analisar extrato: " + (err.message || err));
+      toast.error("Erro ao analisar extrato: " + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -118,7 +120,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const handleConfirmImport = async () => {
     const toImport = items.filter(it => it.selected);
     if (toImport.length === 0) {
-      alert("Nenhum lançamento foi selecionado para importação.");
+      toast.error("Nenhum lançamento foi selecionado para importação.");
       return;
     }
 
@@ -136,7 +138,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
       const targetAccountId = selectedAccountId || accounts[0]?.id;
       const res = await api.confirmImportStatement(targetAccountId, payload);
       if (res.success) {
-        alert(res.message || "Importação concluída com sucesso!");
+        toast.success(res.message || "Importação concluída com sucesso!");
         onImportSuccess();
         onClose();
         // Reset state
@@ -144,10 +146,10 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         setFile(null);
         setFileContent("");
       } else {
-        alert(res.message || "Erro ao salvar transações importadas.");
+        toast.error(res.message || "Erro ao salvar transações importadas.");
       }
     } catch (err: any) {
-      alert("Erro ao confirmar importação: " + (err.message || err));
+      toast.error("Erro ao confirmar importação: " + (err.message || err));
     } finally {
       setLoading(false);
     }

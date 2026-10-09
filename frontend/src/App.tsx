@@ -8,8 +8,10 @@ import { TransactionModal } from "./components/TransactionModal.js";
 import { ImportModal } from "./components/ImportModal.js";
 import { api, Account, Category, Tag, Transaction, User, Budget } from "./services/api.js";
 import { LogOut, User as UserIcon } from "lucide-react";
+import { useToast } from "./components/Feedback.js";
 
 export function App() {
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "budgets" | "settings">("dashboard");
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -87,7 +89,7 @@ export function App() {
       }
       await loadData(true); // reload in background
     } catch (err) {
-      alert("Erro ao salvar lançamento.");
+      toast.error("Erro ao salvar lançamento.");
     }
   };
 
@@ -96,7 +98,7 @@ export function App() {
       await api.deleteTransaction(id);
       await loadData(true); // reload in background
     } catch (err) {
-      alert("Erro ao excluir lançamento.");
+      toast.error("Erro ao excluir lançamento.");
     }
   };
 
@@ -104,9 +106,8 @@ export function App() {
     try {
       await api.confirmTransaction(tx.id, {});
       await loadData(true); // reload in background
-      alert(`Transação "${tx.description}" confirmada!`);
     } catch (err) {
-      alert("Erro ao confirmar transação.");
+      toast.error("Erro ao confirmar transação.");
     }
   };
 

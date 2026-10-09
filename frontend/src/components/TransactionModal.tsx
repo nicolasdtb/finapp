@@ -10,6 +10,7 @@ import {
   getTodayLocalDateString
 } from "../utils/currency.js";
 import { QrScannerModal } from "./QrScannerModal.js";
+import { useToast, useConfirm } from "./Feedback.js";
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const toast = useToast();
+  const confirm = useConfirm();
   const [typeId, setTypeId] = useState<number>(editingTransaction?.typeId || 2); // 1: Receita, 2: Despesa, 3: Transferência
   const [description, setDescription] = useState(editingTransaction?.description || "");
   // amountCents armazena o valor em centavos inteiros (ex: 4590 para R$ 45,90)
@@ -102,10 +105,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         // Chave pura de 44 dígitos — portais da SEFAZ exigem o QR Code real
         setInvoiceScanError(res.message || "Use a câmera para escanear o QR Code da nota.");
       } else {
-        alert(res.message || "Não foi possível extrair os produtos desta nota.");
+        toast.error(res.message || "Não foi possível extrair os produtos desta nota.");
       }
     } catch (err: any) {
-      alert("Erro ao consultar nota fiscal: " + (err.message || err));
+      toast.error("Erro ao consultar nota fiscal: " + (err.message || err));
     } finally {
       setIsScanningInvoice(false);
     }
@@ -187,7 +190,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     if (!description || amountCents <= 0) return;
 
     if (typeId === 3 && accountId === destinationAccountId) {
-      alert("A conta de origem e de destino não podem ser iguais numa transferência.");
+      toast.error("A conta de origem e de destino não podem ser iguais numa transferência.");
       return;
     }
 
@@ -630,8 +633,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             {editingTransaction && onDelete && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Tem certeza que deseja excluir este lançamento?")) {
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Excluir lançamento",
+                    message: "Tem certeza que deseja excluir este lançamento?",
+                  });
+                  if (ok) {
                     onDelete(editingTransaction.id);
                     onClose();
                   }

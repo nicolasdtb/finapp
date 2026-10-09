@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.js";
+import { FeedbackProvider } from "./components/Feedback.js";
 import "./index.css";
 
 // Registro do Service Worker para PWA Standalone no Chrome Mobile
@@ -19,7 +20,9 @@ if ("serviceWorker" in navigator) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <FeedbackProvider>
+      <App />
+    </FeedbackProvider>
   </React.StrictMode>
 );
 

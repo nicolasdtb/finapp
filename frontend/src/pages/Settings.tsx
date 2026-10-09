@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree, Check, X } from "lucide-react";
 import { Account, Category, Tag, api } from "../services/api.js";
 import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
+import { useToast, useConfirm } from "../components/Feedback.js";
 
 interface SettingsProps {
   onBack: () => void;
@@ -18,7 +19,13 @@ export const Settings: React.FC<SettingsProps> = ({
   tags,
   onRefresh
 }) => {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [tab, setTab] = useState<"accounts" | "categories" | "tags">("accounts");
+
+  // Ajuste de saldo direto na lista de contas (no lugar do prompt do navegador)
+  const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
+  const [balanceDraft, setBalanceDraft] = useState("");
 
   // Novo Cartão / Conta
   const [newAccName, setNewAccName] = useState("");
@@ -51,9 +58,38 @@ export const Settings: React.FC<SettingsProps> = ({
   };
 
   const handleDeleteAccount = async (id: number) => {
-    if (confirm("Excluir esta conta apagará todos os lançamentos associados a ela. Confirmar?")) {
+    const ok = await confirm({
+      title: "Excluir conta",
+      message: "Excluir esta conta? Os lançamentos dela continuam no histórico, mas ficam sem conta associada.",
+    });
+    if (ok) {
       await api.deleteAccount(id);
       await onRefresh();
+    }
+  };
+
+  const startBalanceEdit = (acc: Account) => {
+    setEditingBalanceId(acc.id);
+    setBalanceDraft(parseFloat(acc.balance).toFixed(2).replace(".", ","));
+  };
+
+  const handleSaveBalance = async (acc: Account) => {
+    // Aceita "1234,56", "1234.56" e "1.234,56"
+    const normalized = balanceDraft.includes(",")
+      ? balanceDraft.replace(/\./g, "").replace(",", ".")
+      : balanceDraft;
+    const value = parseFloat(normalized);
+    if (isNaN(value)) {
+      toast.error("Informe um valor válido para o saldo.");
+      return;
+    }
+    try {
+      await api.updateAccount(acc.id, { balance: value.toFixed(2) });
+      await onRefresh();
+      setEditingBalanceId(null);
+      toast.success(`Saldo de "${acc.name}" ajustado.`);
+    } catch {
+      toast.error("Não foi possível ajustar o saldo.");
     }
   };
 
@@ -71,7 +107,8 @@ export const Settings: React.FC<SettingsProps> = ({
   };
 
   const handleDeleteCategory = async (id: number) => {
-    if (confirm("Excluir esta categoria?")) {
+    const ok = await confirm({ title: "Excluir categoria", message: "Excluir esta categoria?" });
+    if (ok) {
       await api.deleteCategory(id);
       await onRefresh();
     }
@@ -89,7 +126,8 @@ export const Settings: React.FC<SettingsProps> = ({
   };
 
   const handleDeleteTag = async (id: number) => {
-    if (confirm("Excluir esta tag?")) {
+    const ok = await confirm({ title: "Excluir tag", message: "Excluir esta tag?" });
+    if (ok) {
       await api.deleteTag(id);
       await onRefresh();
     }
@@ -197,7 +235,7 @@ export const Settings: React.FC<SettingsProps> = ({
           {/* Lista de Contas */}
           <div className="space-y-2">
             {accounts.map(acc => (
-              <div key={acc.id} className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex items-center justify-between">
+              <div key={acc.id} className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-y-2">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>
                     <CreditCard className="w-4 h-4" />
@@ -209,15 +247,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => {
-                      const newBal = prompt(`Ajustar saldo de "${acc.name}" (R$):`, parseFloat(acc.balance).toFixed(2));
-                      if (newBal !== null && newBal !== "") {
-                        const clean = newBal.replace(",", ".");
-                        if (!isNaN(parseFloat(clean))) {
-                          api.updateAccount(acc.id, { balance: parseFloat(clean).toFixed(2) }).then(onRefresh);
-                        }
-                      }
-                    }}
+                    onClick={() => startBalanceEdit(acc)}
                     title="Ajustar saldo da conta"
                     className="px-2.5 py-1 text-xs font-semibold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 rounded-lg transition"
                   >
@@ -231,6 +261,38 @@ export const Settings: React.FC<SettingsProps> = ({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+
+                {editingBalanceId === acc.id && (
+                  <div className="w-full flex items-center gap-2">
+                    <span className="text-xs text-slate-400">R$</span>
+                    <input
+                      autoFocus
+                      inputMode="decimal"
+                      value={balanceDraft}
+                      onChange={(e) => setBalanceDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveBalance(acc);
+                        if (e.key === "Escape") setEditingBalanceId(null);
+                      }}
+                      aria-label={`Novo saldo de ${acc.name}`}
+                      className="flex-1 min-w-0 px-3 py-1.5 bg-slate-950 border border-slate-700 focus:border-blue-500 rounded-lg text-sm text-white outline-none"
+                    />
+                    <button
+                      onClick={() => handleSaveBalance(acc)}
+                      title="Salvar saldo"
+                      className="p-2 text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 rounded-lg transition"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingBalanceId(null)}
+                      title="Cancelar"
+                      className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
