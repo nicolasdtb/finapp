@@ -5,13 +5,19 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-finapp_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-finapp_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
       POSTGRES_DB: ${DB_NAME:-finapp}
       TZ: America/Sao_Paulo
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # Sem "ports": o banco so e acessivel pelos outros containers.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+    cpus: 1.0
 
   backend:
     build:
@@ -20,14 +26,17 @@ services:
     container_name: finapp_backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-finapp_user}:${DB_PASSWORD:-finapp_password}@postgres:5432/${DB_NAME:-finapp}
+      DATABASE_URL: postgresql://${DB_USER:-finapp_user}:${DB_PASSWORD:?defina DB_PASSWORD no .env}@postgres:5432/${DB_NAME:-finapp}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       PORT: ${PORT:-3001}
       NODE_ENV: ${NODE_ENV:-production}
       TZ: America/Sao_Paulo
-    ports:
-      - "3001:3001"
+    # Sem "ports": so o nginx (frontend) fala com o backend, pela rede interna.
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
 
   frontend:
     build:
@@ -38,34 +47,14 @@ services:
     environment:
       TZ: America/Sao_Paulo
     ports:
-      - "80:80"
-      - "443:443"
-      - "3000:80"
+      # Publicado SOMENTE no IP do ZeroTier da VM (nunca em 0.0.0.0).
+      - "${ZT_IP:?defina ZT_IP no .env}:8443:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
     depends_on:
       - backend
-
-  dns:
-    image: 4km3/dnsmasq:2.85-r2
-    container_name: finapp_dns
-    restart: unless-stopped
-    ports:
-      - "53:53/udp"
-      - "53:53/tcp"
-    cap_add:
-      - NET_ADMIN
-    command:
-      - --keep-in-foreground
-      - --address=/finapp.zt/172.23.17.157
-      - --server=1.1.1.1
-      - --server=1.0.0.1
-      - --server=8.8.8.8
-      - --server=8.8.4.4
-      - --no-resolv
-      - --cache-size=1500
-      - --neg-ttl=60
-      - --log-queries
+    mem_limit: 128m
+    cpus: 0.5
 
 volumes:
   postgres_data:
