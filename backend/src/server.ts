@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { ZodError } from "zod";
 import fastifyJwt from "@fastify/jwt";
 import { authRoutes } from "./modules/auth/routes.js";
 import { webhookRoutes } from "./modules/webhooks/routes.js";
@@ -13,6 +14,26 @@ import { importRoutes } from "./modules/import/routes.js";
 import { initDatabase } from "./database/init.js";
 
 const app = Fastify({ logger: true });
+
+// Tratamento global de erros: respostas padronizadas e sem vazar detalhes internos.
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof ZodError) {
+    return reply.status(400).send({
+      success: false,
+      message: "Dados inválidos.",
+      issues: error.issues.map((i) => ({ campo: i.path.join("."), mensagem: i.message })),
+    });
+  }
+
+  const status = (error as { statusCode?: number }).statusCode;
+  if (status && status >= 400 && status < 500) {
+    // Erros do proprio Fastify/JWT (JSON malformado, corpo grande demais, etc.)
+    return reply.status(status).send({ success: false, message: error.message });
+  }
+
+  request.log.error(error);
+  return reply.status(500).send({ success: false, message: "Erro interno do servidor." });
+});
 
 async function start() {
   await app.register(cors, {
