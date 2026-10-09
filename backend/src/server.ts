@@ -19,9 +19,15 @@ async function start() {
     origin: true
   });
 
-  // JWT Plugin
+  // JWT Plugin: o segredo e obrigatorio (sem valor padrao no codigo)
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_SECRET nao definido. Configure no .env antes de iniciar o backend.");
+  }
   await app.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET || "finapp_super_secret_jwt_key_2026_change_in_env"
+    secret: jwtSecret,
+    // Tokens de login expiram em 30 dias; depois disso o app pede login de novo.
+    sign: { expiresIn: "30d" }
   });
 
   // Inicializa tabelas, usuarios e seeds
