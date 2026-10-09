@@ -3,6 +3,14 @@ import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, accounts, users } from "../../database/schema.js";
 import { eq, isNull, and } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto";
+
+// Compara segredos sem vazar informacao pelo tempo de resposta.
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
 
 export function parseBankNotification(appName: string, text: string) {
   let amount: number | null = null;
@@ -74,25 +82,38 @@ export function parseBankNotification(appName: string, text: string) {
 
 export async function webhookRoutes(app: FastifyInstance) {
   app.post("/bank-notification", async (request, reply) => {
-    // 1. Identificação do usuário (via Bearer Token no Header ou ?token= na URL)
+    // 1. Autenticacao do webhook.
+    //    - Token do webhook (WEBHOOK_TOKEN) enviado em ?token= ou Authorization: Bearer
+    //    - Ou um JWT de login (comportamento antigo)
+    //    - Sem token: so e aceito enquanto WEBHOOK_REQUIRE_TOKEN nao for "true" (periodo de transicao)
     let userId: number | null = null;
+    const webhookToken = process.env.WEBHOOK_TOKEN || "";
+    const requireToken = process.env.WEBHOOK_REQUIRE_TOKEN === "true";
     const query = request.query as { token?: string };
     const authHeader = request.headers.authorization;
     const token = query.token || (authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null);
 
+    const firstActiveUser = async () => {
+      const [u] = await db.select().from(users).where(isNull(users.deletedAt)).limit(1);
+      return u ? u.id : null;
+    };
+
     if (token) {
-      try {
-        const decoded = app.jwt.verify<{ id: number }>(token);
-        userId = decoded.id;
-      } catch (err) {
-        return reply.status(401).send({ success: false, message: "Token de webhook inválido ou expirado." });
+      if (webhookToken && safeEqual(token, webhookToken)) {
+        userId = await firstActiveUser();
+      } else {
+        try {
+          const decoded = app.jwt.verify<{ id: number }>(token);
+          userId = decoded.id;
+        } catch (err) {
+          return reply.status(401).send({ success: false, message: "Token de webhook inválido ou expirado." });
+        }
       }
+    } else if (requireToken) {
+      return reply.status(401).send({ success: false, message: "Token de webhook obrigatório." });
     } else {
-      // Fallback: se não passar token, vincula ao primeiro usuário ativo registrado
-      const [firstUser] = await db.select().from(users).where(isNull(users.deletedAt)).limit(1);
-      if (firstUser) {
-        userId = firstUser.id;
-      }
+      request.log.warn({ ip: request.ip }, "Webhook recebido SEM token (modo de transicao).");
+      userId = await firstActiveUser();
     }
 
     if (!userId) {
