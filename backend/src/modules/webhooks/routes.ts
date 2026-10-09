@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, accounts, users } from "../../database/schema.js";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, gte } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 
 // Compara segredos sem vazar informacao pelo tempo de resposta.
@@ -160,15 +160,37 @@ export async function webhookRoutes(app: FastifyInstance) {
     }
 
     const createdTxs: any[] = [];
+    let duplicates = 0;
+    // Janela para considerar a mesma notificacao como duplicada (reenvio da fila do celular)
+    const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
     for (const notif of notificationsList) {
       const parsed = parseBankNotification(notif.app_name, `${notif.title} ${notif.text}`);
       if (!parsed.amount) continue;
 
+      const rawText = `[${notif.app_name}] ${notif.title}: ${notif.text}`;
+
+      // Ignora a mesma notificacao recebida de novo em poucos minutos
+      const [duplicate] = await db.select({ id: transactions.id }).from(transactions)
+        .where(and(
+          eq(transactions.userId, userId),
+          eq(transactions.rawBankNotification, rawText),
+          isNull(transactions.deletedAt),
+          gte(transactions.createdAt, new Date(Date.now() - DUPLICATE_WINDOW_MS))
+        ))
+        .limit(1);
+      if (duplicate) {
+        duplicates++;
+        request.log.info({ duplicateOf: duplicate.id }, "Notificacao duplicada ignorada.");
+        continue;
+      }
+
       const bankNameLower = notif.app_name.toLowerCase();
-      const matchedAccount = userAccounts.find(acc => 
+      const bankAccount = userAccounts.find(acc => 
         acc.name.toLowerCase().includes(bankNameLower) || bankNameLower.includes(acc.name.toLowerCase())
-      ) || userAccounts[0];
+      );
+      // Sem conta do banco: usa a primeira, mas avisa na observacao para o usuario conferir ao confirmar
+      const matchedAccount = bankAccount || userAccounts[0];
 
       // 3. Salva a transação como PENDENTE associada estritamente ao usuário
       const [newTx] = await db.insert(transactions).values({
@@ -179,10 +201,22 @@ export async function webhookRoutes(app: FastifyInstance) {
         date: new Date(),
         accountId: matchedAccount.id,
         userId: userId,
-        rawBankNotification: `[${notif.app_name}] ${notif.title}: ${notif.text}`
+        notes: bankAccount
+          ? null
+          : `Conta não identificada automaticamente para "${notif.app_name}". Confira a conta antes de confirmar.`,
+        rawBankNotification: rawText
       }).returning();
 
       createdTxs.push(newTx);
+    }
+
+    if (createdTxs.length === 0 && duplicates > 0) {
+      // Responde 2xx para o celular tirar o item da fila
+      return reply.status(200).send({
+        success: true,
+        message: `${duplicates} notificação(ões) duplicada(s) ignorada(s).`,
+        transactions: []
+      });
     }
 
     if (createdTxs.length === 0) {
