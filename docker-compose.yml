@@ -48,7 +48,7 @@ services:
       TZ: America/Sao_Paulo
     ports:
       # Publicado SOMENTE no IP do ZeroTier da VM (nunca em 0.0.0.0).
-      - "${ZT_IP:?defina ZT_IP no .env}:8443:443"
+      - "${ZT_IP:?defina ZT_IP no .env}:443:443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
     depends_on:
