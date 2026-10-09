@@ -57,6 +57,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return calculateFinancialPeriods(transactions, categories, cycleOffset);
   }, [transactions, categories, cycleOffset]);
 
+  const accountName = (id?: number | null) =>
+    accounts.find(a => a.id === id)?.name ?? "Conta removida";
+
   const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
 
   // Ordena rigorosamente do mais recente para o mais antigo (data decrescente, e por id decrescente para desempate)
@@ -456,31 +459,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                      <p className="text-xs text-slate-400">
-                        {new Date(t.date).toLocaleDateString("pt-BR")}
-                        {t.rawBankNotification && " • Via Notificação"}
-                      </p>
-
-                      {t.tagIds && t.tagIds.length > 0 && (
-                        <div className="flex flex-wrap gap-1 ml-1">
-                          {t.tagIds.map(tid => {
-                            const tg = tags.find(tag => tag.id === tid);
-                            if (!tg) return null;
-                            return (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {t.typeId === 3 ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-slate-300 bg-slate-700/40 border border-slate-600/40 px-1.5 py-0.5 rounded-md">
+                          <CreditCard className="w-3 h-3" />
+                          {accountName(t.accountId)} → {accountName(t.destinationAccountId)}
+                        </span>
+                      ) : (
+                        <>
+                          {(() => {
+                            const cat = categories.find(c => c.id === t.categoryId);
+                            return cat ? (
                               <span
-                                key={tg.id}
-                                style={{ backgroundColor: tg.color + '20', color: tg.color, borderColor: tg.color + '40' }}
-                                className="px-1.5 py-0.2 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                                style={{ backgroundColor: cat.color + '20', color: cat.color, borderColor: cat.color + '40' }}
+                                className="px-1.5 py-0.5 text-[10px] font-semibold rounded-md border"
                               >
-                                <TagIcon className="w-2.5 h-2.5" />
-                                {tg.name}
+                                {cat.name}
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] text-slate-500 border border-slate-700 rounded-md">
+                                Sem categoria
                               </span>
                             );
-                          })}
-                        </div>
+                          })()}
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-300 bg-slate-700/40 border border-slate-600/40 px-1.5 py-0.5 rounded-md">
+                            <CreditCard className="w-3 h-3" />
+                            {accountName(t.accountId)}
+                          </span>
+                        </>
                       )}
+
+                      {t.tagIds && t.tagIds.map(tid => {
+                        const tg = tags.find(tag => tag.id === tid);
+                        if (!tg) return null;
+                        return (
+                          <span
+                            key={tg.id}
+                            style={{ backgroundColor: tg.color + '20', color: tg.color, borderColor: tg.color + '40' }}
+                            className="px-1.5 py-0.5 text-[9px] font-bold rounded border flex items-center gap-0.5"
+                          >
+                            <TagIcon className="w-2.5 h-2.5" />
+                            {tg.name}
+                          </span>
+                        );
+                      })}
                     </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {new Date(t.date).toLocaleDateString("pt-BR")}
+                      {t.rawBankNotification && " • Via Notificação"}
+                    </p>
                   </div>
                 </div>
 

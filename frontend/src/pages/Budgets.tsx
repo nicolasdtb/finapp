@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Transaction, Category, Budget, api } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
+import { useToast, useConfirm } from "../components/Feedback.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
 
@@ -28,6 +29,8 @@ export const Budgets: React.FC<BudgetsProps> = ({
   budgets, 
   onRefreshBudgets 
 }) => {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [cycleOffset, setCycleOffset] = useState<number>(0);
   const [isAdding, setIsAdding] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(categories[0]?.id || 1);
@@ -125,17 +128,18 @@ export const Budgets: React.FC<BudgetsProps> = ({
       setIsAdding(false);
       setTargetAmountCents(0);
     } catch (err) {
-      alert("Erro ao salvar orçamento.");
+      toast.error("Erro ao salvar orçamento.");
     }
   };
 
   const handleDeleteBudget = async (id: number) => {
-    if (!confirm("Excluir esta meta de orçamento?")) return;
+    const ok = await confirm({ title: "Excluir meta", message: "Excluir esta meta de orçamento?" });
+    if (!ok) return;
     try {
       await api.deleteBudget(id);
       await onRefreshBudgets();
     } catch (err) {
-      alert("Erro ao excluir orçamento.");
+      toast.error("Erro ao excluir orçamento.");
     }
   };
 
