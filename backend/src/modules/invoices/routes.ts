@@ -16,6 +16,21 @@ export interface ParsedInvoiceResult {
   items: ParsedInvoiceItem[];
 }
 
+const INVOICE_FETCH_TIMEOUT_MS = 15000;
+const INVOICE_MAX_BYTES = 5 * 1024 * 1024;
+
+// Aceita apenas http(s) em dominios oficiais .gov.br (SEFAZ de cada estado).
+function isAllowedInvoiceUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    const host = u.hostname.toLowerCase();
+    return host.endsWith(".gov.br");
+  } catch {
+    return false;
+  }
+}
+
 export async function invoiceRoutes(app: FastifyInstance) {
   // Hook de autenticação obrigatória
   app.addHook("preHandler", async (request, reply) => {
@@ -58,10 +73,20 @@ export async function invoiceRoutes(app: FastifyInstance) {
       });
     }
 
+    // So consulta sites oficiais (dominios .gov.br): evita que o servidor seja usado
+    // para acessar enderecos internos ou sites arbitrarios.
+    if (!isAllowedInvoiceUrl(targetUrl)) {
+      return reply.status(400).send({
+        success: false,
+        message: "Endereço não permitido. Use o QR Code da NFC-e, que aponta para o site oficial da SEFAZ (.gov.br)."
+      });
+    }
+
     app.log.info({ originalInput: input, targetUrl }, "Iniciando consulta de Nota Fiscal SEFAZ");
 
     try {
       const response = await fetch(targetUrl, {
+        signal: AbortSignal.timeout(INVOICE_FETCH_TIMEOUT_MS),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -75,7 +100,23 @@ export async function invoiceRoutes(app: FastifyInstance) {
         });
       }
 
+      // Redirecionamentos tambem precisam terminar em site oficial
+      if (!isAllowedInvoiceUrl(response.url)) {
+        return reply.status(400).send({
+          success: false,
+          message: "A consulta foi redirecionada para um endereço não permitido."
+        });
+      }
+
+      const declaredSize = Number(response.headers.get("content-length") || 0);
+      if (declaredSize > INVOICE_MAX_BYTES) {
+        return reply.status(413).send({ success: false, message: "Resposta da SEFAZ grande demais." });
+      }
+
       const html = await response.text();
+      if (html.length > INVOICE_MAX_BYTES) {
+        return reply.status(413).send({ success: false, message: "Resposta da SEFAZ grande demais." });
+      }
       const $ = cheerio.load(html);
 
       // 1. Extração do Nome do Estabelecimento
@@ -203,6 +244,12 @@ export async function invoiceRoutes(app: FastifyInstance) {
 
     } catch (err: any) {
       app.log.error(err);
+      if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+        return reply.status(504).send({
+          success: false,
+          message: "A SEFAZ demorou demais para responder. Tente novamente em instantes."
+        });
+      }
       return reply.status(500).send({
         success: false,
         message: "Erro ao processar conteúdo da Nota Fiscal: " + (err.message || err)
