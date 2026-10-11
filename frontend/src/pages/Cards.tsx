@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { Account, Category, Transaction } from "../services/api.js";
+import { nextBusinessDay } from "../utils/businessDays.js";
 
 interface CardsProps {
   accounts: Account[];
@@ -22,6 +23,19 @@ function nextOccurrence(day: number, from: Date): Date {
   let d = make(today.getFullYear(), today.getMonth());
   if (d < today) d = make(today.getFullYear(), today.getMonth() + 1);
   return d;
+}
+
+// Proximo vencimento: o dia do mes informado; se cair em fim de semana ou feriado, vale o proximo dia util
+function nextDueDate(day: number, from: Date): { date: Date; nominal: Date } {
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const build = (y: number, m: number) => {
+    const last = new Date(y, m + 1, 0).getDate();
+    const nominal = new Date(y, m, Math.min(day, last));
+    return { nominal, date: nextBusinessDay(nominal) };
+  };
+  let r = build(today.getFullYear(), today.getMonth());
+  if (r.date < today) r = build(today.getFullYear(), today.getMonth() + 1);
+  return r;
 }
 
 function daysUntil(target: Date, from: Date): number {
@@ -68,8 +82,10 @@ export const Cards: React.FC<CardsProps> = ({ accounts, transactions, categories
   const available = limit - debt;
   const usedPct = hasLimit ? Math.min(100, (debt / limit) * 100) : 0;
   const closing = card.closingDay ? nextOccurrence(card.closingDay, now) : null;
-  const due = card.dueDay ? nextOccurrence(card.dueDay, now) : null;
-  const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const dueInfo = card.dueDay ? nextDueDate(card.dueDay, now) : null;
+  const due = dueInfo?.date ?? null;
+  const dueAdjusted = !!dueInfo && dueInfo.date.getTime() !== dueInfo.nominal.getTime();
+  const fmtDate = (d: Date) => d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 
   const categoryName = (id?: number) => categories.find(c => c.id === id)?.name;
   const recent = transactions
@@ -143,6 +159,11 @@ export const Cards: React.FC<CardsProps> = ({ accounts, transactions, categories
             <>
               <p className="text-lg font-bold text-white">{fmtDate(due)}</p>
               <p className="text-[11px] text-slate-500">{inDays(daysUntil(due, now))}</p>
+              {dueAdjusted && dueInfo && (
+                <p className="text-[11px] text-amber-400 mt-1">
+                  Dia {dueInfo.nominal.getDate()} cai em dia não útil; vale o próximo dia útil.
+                </p>
+              )}
             </>
           ) : (
             <p className="text-xs text-amber-400 mt-1">Não configurado</p>
