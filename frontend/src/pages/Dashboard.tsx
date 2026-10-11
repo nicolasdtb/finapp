@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { Transaction, Account, Category, Tag } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
+import { SwipeRow } from "../components/SwipeRow.js";
+import { useConfirm } from "../components/Feedback.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
 
 interface DashboardProps {
@@ -29,6 +31,7 @@ interface DashboardProps {
   onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
   onConfirmBatch: (ids: number[]) => Promise<void> | void;
+  onDeleteTransaction: (id: number) => Promise<void> | void;
   onOpenSettings: () => void;
   onOpenImport: () => void;
   onOpenCard: (accountId: number) => void;
@@ -43,11 +46,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onEditTransaction,
   onConfirmPending,
   onConfirmBatch,
+  onDeleteTransaction,
   onOpenSettings,
   onOpenImport,
   onOpenCard
 }) => {
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
+
+  const swipeDelete = async (t: Transaction) => {
+    const ok = await confirm({
+      title: "Excluir lançamento",
+      message: `Excluir "${t.description}"?`,
+    });
+    if (ok) await onDeleteTransaction(t.id);
+  };
   const [cycleOffset, setCycleOffset] = useState<number>(0);
 
   // Estados de Busca e Filtros Rápidos
@@ -478,8 +491,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           ) : (
             (activeTab === "all" ? confirmedTransactions : pendingTransactions).map(t => (
-              <div 
+              <SwipeRow
                 key={t.id}
+                onSwipeRight={t.statusId === 2 ? () => onConfirmPending(t) : undefined}
+                // Compra parcelada: a exclusao pergunta "so esta" ou "todas", entao fica na tela de edicao
+                onSwipeLeft={t.installmentGroupId ? undefined : () => swipeDelete(t)}
+              >
+              <div 
                 onClick={() => onEditTransaction(t)}
                 className={`p-3.5 bg-slate-800/60 border rounded-2xl flex items-center justify-between cursor-pointer transition active:scale-[0.99] ${
                   t.statusId === 2 
@@ -585,6 +603,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   )}
                 </div>
               </div>
+              </SwipeRow>
             ))
           )}
         </div>

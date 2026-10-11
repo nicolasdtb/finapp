@@ -57,6 +57,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [notes, setNotes] = useState(editingTransaction?.notes || "");
   const [installments, setInstallments] = useState<number>(1);
   const [showDeleteChoice, setShowDeleteChoice] = useState(false);
+  const [saving, setSaving] = useState(false);
   // Parcelamento: so em compra nova (despesa) em conta do tipo cartao de credito
   const selectedAccount = accounts.find(a => a.id === accountId);
   const installmentsAllowed = !editingTransaction && typeId === 2 && selectedAccount?.typeId === 2;
@@ -205,6 +206,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     const [y, m, d] = date.split("-").map(Number);
     const localDate = new Date(y, m - 1, d, 12, 0, 0);
 
+    if (saving) return;
+    setSaving(true);
+    try {
     await onSave({
       description,
       amount: centsToDecimalString(amountCents),
@@ -220,6 +224,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       items: showItems && typeId !== 3 && !(installmentsAllowed && installments > 1) ? items : undefined
     });
     onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -687,9 +694,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             )}
             <button
               type="submit"
-              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 active:scale-[0.98] transition text-sm"
+              disabled={saving}
+              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 active:scale-[0.98] transition text-sm"
             >
-              {editingTransaction ? "Salvar Alterações" : "Confirmar Lançamento"}
+              {saving ? "Salvando…" : editingTransaction ? "Salvar Alterações" : "Confirmar Lançamento"}
             </button>
           </div>
         </form>
