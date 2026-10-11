@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { ChevronRight } from "lucide-react";
 import { 
   Wallet, 
   ArrowUpRight, 
@@ -30,6 +31,7 @@ interface DashboardProps {
   onConfirmBatch: (ids: number[]) => Promise<void> | void;
   onOpenSettings: () => void;
   onOpenImport: () => void;
+  onOpenCard: (accountId: number) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
@@ -42,7 +44,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onConfirmPending,
   onConfirmBatch,
   onOpenSettings,
-  onOpenImport
+  onOpenImport,
+  onOpenCard
 }) => {
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const [cycleOffset, setCycleOffset] = useState<number>(0);
@@ -62,7 +65,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const accountName = (id?: number | null) =>
     accounts.find(a => a.id === id)?.name ?? "Conta removida";
 
-  const totalBalance = accounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
+  // Saldo separado: dinheiro em contas x dívida dos cartões de crédito
+  const cardAccounts = accounts.filter(a => a.typeId === 2);
+  const cashBalance = accounts
+    .filter(a => a.typeId !== 2)
+    .reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0);
+  const cardsDebt = Math.max(0, -cardAccounts.reduce((acc, a) => acc + parseFloat(a.balance || "0"), 0));
+  const balanceAfterInvoices = cashBalance - cardsDebt;
+  const totalBalance = cashBalance;
 
   // Ordena rigorosamente do mais recente para o mais antigo (data decrescente, e por id decrescente para desempate)
   const sortByNewestFirst = (a: Transaction, b: Transaction) => {
@@ -189,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Cartao de Saldo Geral estilo Minhas Financas */}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/60 rounded-3xl p-6 shadow-xl relative overflow-hidden mb-6">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo Consolidado</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Saldo em Contas</span>
           <div className="flex items-center gap-2">
             <button 
               onClick={onOpenImport}
@@ -209,9 +219,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <Wallet className="w-5 h-5 text-blue-400" />
           </div>
         </div>
-        <div className="text-3xl font-extrabold tracking-tight text-white mb-6">
+        <div className={`text-3xl font-extrabold tracking-tight text-white ${cardAccounts.length > 0 ? "mb-3" : "mb-6"}`}>
           R$ {totalBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
         </div>
+        {cardAccounts.length > 0 && (
+          <div className="mb-5 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Faturas a pagar</span>
+              <span className="font-semibold text-rose-400">- R$ {cardsDebt.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Saldo após faturas</span>
+              <span className={`font-semibold ${balanceAfterInvoices >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                R$ {balanceAfterInvoices.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4 border-t border-slate-700/60 pt-4">
           <div className="flex items-center gap-3">
@@ -254,7 +278,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {accounts.map(acc => (
             <div 
               key={acc.id}
-              className="min-w-[155px] bg-slate-800/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col justify-between"
+              onClick={acc.typeId === 2 ? () => onOpenCard(acc.id) : undefined}
+              role={acc.typeId === 2 ? "button" : undefined}
+              className={`min-w-[155px] border rounded-2xl p-4 flex flex-col justify-between ${
+                acc.typeId === 2
+                  ? "bg-violet-500/10 border-violet-500/40 cursor-pointer active:scale-[0.98] transition"
+                  : "bg-slate-800/80 border-slate-700/50"
+              }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div 
@@ -269,9 +299,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <div>
                 <p className="text-xs text-slate-400 font-medium truncate">{acc.name}</p>
-                <p className="text-sm font-bold text-slate-100">
-                  R$ {parseFloat(acc.balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </p>
+                {acc.typeId === 2 ? (
+                  <>
+                    <p className="text-sm font-bold text-rose-300">
+                      R$ {Math.max(0, -parseFloat(acc.balance)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[10px] text-slate-400">dívida no cartão</p>
+                    <p className="mt-2 text-[11px] font-bold text-violet-300 flex items-center gap-0.5">
+                      Ver fatura <ChevronRight className="w-3 h-3" />
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm font-bold text-slate-100">
+                    R$ {parseFloat(acc.balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </p>
+                )}
               </div>
             </div>
           ))}

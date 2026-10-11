@@ -9,11 +9,13 @@ import { ImportModal } from "./components/ImportModal.js";
 import { api, Account, Category, Tag, Transaction, User, Budget } from "./services/api.js";
 import { LogOut, User as UserIcon } from "lucide-react";
 import { useToast } from "./components/Feedback.js";
+import { Cards } from "./pages/Cards.js";
 
 export function App() {
   const toast = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "budgets" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "reports" | "budgets" | "settings" | "cards">("dashboard");
+  const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -184,6 +186,18 @@ export function App() {
             onConfirmBatch={handleConfirmBatch}
             onOpenSettings={() => setCurrentView("settings")}
             onOpenImport={() => setIsImportOpen(true)}
+            onOpenCard={(id) => {
+              setSelectedCardId(id);
+              setCurrentView("cards");
+            }}
+          />
+        ) : currentView === "cards" ? (
+          <Cards
+            accounts={accounts}
+            transactions={transactions}
+            categories={categories}
+            initialCardId={selectedCardId}
+            onBack={() => setCurrentView("dashboard")}
           />
         ) : currentView === "reports" ? (
           <Reports 
