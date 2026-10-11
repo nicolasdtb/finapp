@@ -4,9 +4,9 @@ import { db } from "../../database/index.js";
 import { transactions, transactionItems, transactionTags, transactionItemTags, accounts, categories, tags } from "../../database/schema.js";
 import { desc, eq, isNull, sql, and, inArray } from "drizzle-orm";
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-interface BalanceEffect {
+export interface BalanceEffect {
   typeId: number;
   amount: string;
   accountId: number;
@@ -15,7 +15,7 @@ interface BalanceEffect {
 
 // Soma (direction = 1) ou desfaz (direction = -1) o efeito de um lancamento CONFIRMADO
 // no saldo das contas. Usa o valor como texto (numeric) para evitar erro de ponto flutuante.
-async function applyBalanceEffect(tx: Tx, userId: number, t: BalanceEffect, direction: 1 | -1) {
+export async function applyBalanceEffect(tx: Tx, userId: number, t: BalanceEffect, direction: 1 | -1) {
   const move = async (accountId: number, sign: 1 | -1) => {
     const delta = sql`${accounts.balance} + ${t.amount}::numeric`;
     const inverse = sql`${accounts.balance} - ${t.amount}::numeric`;

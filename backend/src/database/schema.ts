@@ -160,3 +160,16 @@ export const userSettings = pgTable("user_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+
+// Pagamentos de fatura de cartao: uma linha por (cartao, fatura). A fatura e identificada
+// pelo mes de vencimento (ref = "AAAA-MM"). O dinheiro sai de fromAccountId como transferencia.
+export const cardInvoicePayments = pgTable("card_invoice_payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  accountId: integer("account_id").references(() => accounts.id).notNull(), // o cartao
+  ref: text("ref").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  fromAccountId: integer("from_account_id").references(() => accounts.id).notNull(),
+  transactionId: integer("transaction_id").references(() => transactions.id),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+});

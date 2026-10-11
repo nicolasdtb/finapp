@@ -63,6 +63,15 @@ export interface TransactionItem {
   tagIds?: number[];
 }
 
+export interface CardPayment {
+  id: number;
+  accountId: number;
+  ref: string;
+  amount: string;
+  fromAccountId: number;
+  paidAt: string;
+}
+
 export interface Transaction {
   id: number;
   description: string;
@@ -237,6 +246,24 @@ export const api = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ ids }),
     });
+    return res.json();
+  },
+
+  // Faturas de cartao
+  async getCardPayments(): Promise<CardPayment[]> {
+    const res = await fetch(`${API_URL}/cards/payments`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+  async payCardInvoice(accountId: number, data: { ref: string; amount: string; fromAccountId: number }): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch(`${API_URL}/cards/${accountId}/pay`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  async undoCardPayment(id: number): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch(`${API_URL}/cards/payments/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
 

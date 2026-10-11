@@ -194,6 +194,20 @@ export async function initDatabase() {
         used_at TIMESTAMP
       );
     `);
+    // Pagamentos de fatura de cartao
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS card_invoice_payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        account_id INTEGER NOT NULL REFERENCES accounts(id),
+        ref TEXT NOT NULL,
+        amount NUMERIC(12, 2) NOT NULL,
+        from_account_id INTEGER NOT NULL REFERENCES accounts(id),
+        transaction_id INTEGER REFERENCES transactions(id),
+        paid_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (account_id, ref)
+      );
+    `);
     // Sem nenhum administrador: o usuario mais antigo vira administrador
     await pool.query(`
       UPDATE users SET is_admin = TRUE

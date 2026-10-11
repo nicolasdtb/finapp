@@ -198,6 +198,7 @@ export function App() {
             categories={categories}
             initialCardId={selectedCardId}
             onBack={() => setCurrentView("dashboard")}
+            onRefresh={() => loadData(true)}
           />
         ) : currentView === "reports" ? (
           <Reports 

@@ -11,6 +11,7 @@ import { tagRoutes } from "./modules/tags/routes.js";
 import { budgetRoutes } from "./modules/budgets/routes.js";
 import { invoiceRoutes } from "./modules/invoices/routes.js";
 import { importRoutes } from "./modules/import/routes.js";
+import { cardRoutes } from "./modules/cards/routes.js";
 import { initDatabase } from "./database/init.js";
 
 // trustProxy: o backend so e acessado pelo nginx, que informa o IP real em X-Forwarded-For
@@ -70,6 +71,7 @@ async function start() {
   await app.register(budgetRoutes, { prefix: "/api/v1/budgets" });
   await app.register(invoiceRoutes, { prefix: "/api/v1/invoices" });
   await app.register(importRoutes, { prefix: "/api/v1/import" });
+  await app.register(cardRoutes, { prefix: "/api/v1/cards" });
 
   const port = Number(process.env.PORT) || 3001;
   const host = "0.0.0.0";

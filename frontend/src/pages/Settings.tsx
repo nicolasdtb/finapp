@@ -320,7 +320,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   className="col-span-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
                 />
                 <p className="col-span-3 text-[11px] text-slate-500">
-                  Dívida atual: deixe 0 num cartão novo, ou informe quanto você já deve nele. Fechamento: último dia de compras da fatura (no Nubank é 7 dias antes do vencimento: vence dia 8, fecha dia 1). Vencimento: dia do mês em que a fatura vence; se cair em fim de semana ou feriado, vale o próximo dia útil. Compras feitas depois do fechamento entram na fatura do mês seguinte.
+                  Dívida atual: deixe 0 num cartão novo, ou informe quanto você já deve nele. Fechamento: último dia de compras da fatura (no Nubank é 7 dias antes do vencimento: vence dia 8, fecha dia 1). Vencimento: dia do mês em que a fatura vence; se cair em fim de semana ou feriado, vale o próximo dia útil. Compras feitas a partir do dia do fechamento entram na fatura do mês seguinte.
                 </p>
               </div>
             )}
