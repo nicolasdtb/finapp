@@ -110,7 +110,7 @@ export const api = {
     return res.json();
   },
   async createInvite(): Promise<{ success: boolean; code?: string; expiresAt?: string; message?: string }> {
-    const res = await fetch(`${API_URL}/auth/invites`, { method: "POST", headers: getAuthHeaders() });
+    const res = await fetch(`${API_URL}/auth/invites`, { method: "POST", headers: getAuthHeaders(), body: "{}" });
     return res.json();
   },
   async deleteInvite(id: number): Promise<{ success: boolean }> {
@@ -124,7 +124,7 @@ export const api = {
     return res.json();
   },
   async regenerateWebhookToken(): Promise<{ token?: string }> {
-    const res = await fetch(`${API_URL}/auth/webhook-token/regenerate`, { method: "POST", headers: getAuthHeaders() });
+    const res = await fetch(`${API_URL}/auth/webhook-token/regenerate`, { method: "POST", headers: getAuthHeaders(), body: "{}" });
     return res.json();
   },
 
