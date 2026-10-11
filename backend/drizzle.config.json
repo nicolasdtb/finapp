@@ -3,6 +3,6 @@
   "schema": "./src/database/schema.ts",
   "driver": "pg",
   "dbCredentials": {
-    "connectionString": "postgresql://finapp_user:finapp_password@postgres:5432/finapp"
+    "connectionString": "postgresql://finapp_user:SENHA_DO_ENV@postgres:5432/finapp"
   }
 }

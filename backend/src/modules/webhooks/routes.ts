@@ -82,38 +82,29 @@ export function parseBankNotification(appName: string, text: string) {
 
 export async function webhookRoutes(app: FastifyInstance) {
   app.post("/bank-notification", async (request, reply) => {
-    // 1. Autenticacao do webhook.
-    //    - Token do webhook (WEBHOOK_TOKEN) enviado em ?token= ou Authorization: Bearer
-    //    - Ou um JWT de login (comportamento antigo)
-    //    - Sem token: so e aceito enquanto WEBHOOK_REQUIRE_TOKEN nao for "true" (periodo de transicao)
+    // 1. Autenticacao do webhook: cada usuario tem o proprio token (Configuracoes > Conta),
+    //    enviado em ?token= ou Authorization: Bearer. Um JWT de login tambem e aceito.
     let userId: number | null = null;
-    const webhookToken = process.env.WEBHOOK_TOKEN || "";
-    const requireToken = process.env.WEBHOOK_REQUIRE_TOKEN === "true";
     const query = request.query as { token?: string };
     const authHeader = request.headers.authorization;
     const token = query.token || (authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null);
 
-    const firstActiveUser = async () => {
-      const [u] = await db.select().from(users).where(isNull(users.deletedAt)).limit(1);
-      return u ? u.id : null;
-    };
-
-    if (token) {
-      if (webhookToken && safeEqual(token, webhookToken)) {
-        userId = await firstActiveUser();
-      } else {
-        try {
-          const decoded = app.jwt.verify<{ id: number }>(token);
-          userId = decoded.id;
-        } catch (err) {
-          return reply.status(401).send({ success: false, message: "Token de webhook inválido ou expirado." });
-        }
-      }
-    } else if (requireToken) {
+    if (!token) {
       return reply.status(401).send({ success: false, message: "Token de webhook obrigatório." });
+    }
+
+    const activeUsers = await db.select({ id: users.id, webhookToken: users.webhookToken })
+      .from(users).where(isNull(users.deletedAt));
+    const owner = activeUsers.find(u => u.webhookToken && safeEqual(token, u.webhookToken));
+    if (owner) {
+      userId = owner.id;
     } else {
-      request.log.warn({ ip: request.ip }, "Webhook recebido SEM token (modo de transicao).");
-      userId = await firstActiveUser();
+      try {
+        const decoded = app.jwt.verify<{ id: number }>(token);
+        userId = decoded.id;
+      } catch (err) {
+        return reply.status(401).send({ success: false, message: "Token de webhook inválido ou expirado." });
+      }
     }
 
     if (!userId) {

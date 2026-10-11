@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { pool } from "./index.js";
 
 export const createTablesSQL = `
@@ -178,6 +179,38 @@ export async function initDatabase() {
         PRIMARY KEY (transaction_item_id, tag_id)
       );
     `);
+    // Administrador, token de webhook por usuario e convites de cadastro
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS webhook_token TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS users_webhook_token_idx ON users(webhook_token);
+      CREATE TABLE IF NOT EXISTS invitations (
+        id SERIAL PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMP NOT NULL,
+        used_by INTEGER REFERENCES users(id),
+        used_at TIMESTAMP
+      );
+    `);
+    // Sem nenhum administrador: o usuario mais antigo vira administrador
+    await pool.query(`
+      UPDATE users SET is_admin = TRUE
+      WHERE id = (SELECT MIN(id) FROM users WHERE deleted_at IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = TRUE AND deleted_at IS NULL);
+    `);
+    // Usuarios sem token de webhook ganham um. O usuario mais antigo herda o WEBHOOK_TOKEN do .env
+    // (o celular ja configurado continua funcionando sem mudar nada).
+    const legacyToken = process.env.WEBHOOK_TOKEN || "";
+    const needToken = await pool.query(
+      "SELECT id FROM users WHERE webhook_token IS NULL AND deleted_at IS NULL ORDER BY id"
+    );
+    for (const row of needToken.rows) {
+      let token = randomBytes(32).toString("hex");
+      if (legacyToken && row === needToken.rows[0]) token = legacyToken;
+      await pool.query("UPDATE users SET webhook_token = $1 WHERE id = $2", [token, row.id]);
+    }
     console.log("✅ Banco de dados e tabela de usuários inicializados com sucesso!");
   } catch (err) {
     console.error("❌ Erro ao inicializar banco:", err);

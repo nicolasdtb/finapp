@@ -1,5 +1,5 @@
-﻿import React, { useState } from "react";
-import { Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck } from "lucide-react";
+﻿import React, { useState, useEffect } from "react";
+import { Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck, Ticket } from "lucide-react";
 import { api, User } from "../services/api.js";
 
 interface LoginModalProps {
@@ -13,6 +13,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [firstUser, setFirstUser] = useState(false);
+
+  // Instalacao nova (sem nenhum usuario): o cadastro nao exige convite
+  useEffect(() => {
+    api.getAuthStatus().then((r) => {
+      if (r.firstUser) {
+        setFirstUser(true);
+        setIsRegister(true);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +33,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
 
     try {
       if (isRegister) {
-        const res = await api.register(name, email, password);
+        const res = await api.register(name, email, password, inviteCode);
         if (!res.success || !res.token || !res.user) {
           setError(res.message || "Erro ao criar conta.");
           return;
@@ -55,7 +67,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             {isRegister ? "Criar Conta" : "FinApp Login"}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {isRegister ? "Cadastro de usuário seguro (máx: 3)" : "Acesse seu controle financeiro"}
+            {isRegister ? (firstUser ? "Crie o primeiro usuário (administrador)" : "Cadastro apenas com código de convite") : "Acesse seu controle financeiro"}
           </p>
         </div>
 
@@ -66,6 +78,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
+          {isRegister && !firstUser && (
+            <div>
+              <label className="text-xs font-semibold text-slate-400 block mb-1">Código de convite</label>
+              <div className="relative">
+                <Ticket className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  required
+                  placeholder="XXXX-XXXX-XXXX"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  autoCapitalize="characters"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white tracking-widest focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+          )}
+
           {isRegister && (
             <div>
               <label className="text-xs font-semibold text-slate-400 block mb-1">Nome</label>
@@ -123,6 +153,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
+        {!firstUser && (
         <div className="text-center mt-5 pt-4 border-t border-slate-800/80">
           <button
             type="button"
@@ -132,9 +163,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             }}
             className="text-xs text-blue-400 hover:underline font-medium"
           >
-            {isRegister ? "Já possui uma conta? Faça login" : "Não tem conta ainda? Cadastre-se"}
+            {isRegister ? "Já possui uma conta? Faça login" : "Tenho um código de convite"}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

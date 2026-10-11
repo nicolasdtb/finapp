@@ -15,6 +15,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  isAdmin?: boolean;
 }
 
 export interface Account {
@@ -89,12 +90,41 @@ export const api = {
     return res.json();
   },
 
-  async register(name: string, email: string, password: string): Promise<{ success: boolean; token?: string; user?: User; message?: string }> {
+  async register(name: string, email: string, password: string, inviteCode: string): Promise<{ success: boolean; token?: string; user?: User; message?: string }> {
     const res = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, inviteCode }),
     });
+    return res.json();
+  },
+
+  async getAuthStatus(): Promise<{ firstUser: boolean }> {
+    const res = await fetch(`${API_URL}/auth/status`);
+    return res.json();
+  },
+
+  // Convites (administrador)
+  async getInvites(): Promise<{ id: number; code: string; expiresAt: string }[]> {
+    const res = await fetch(`${API_URL}/auth/invites`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+  async createInvite(): Promise<{ success: boolean; code?: string; expiresAt?: string; message?: string }> {
+    const res = await fetch(`${API_URL}/auth/invites`, { method: "POST", headers: getAuthHeaders() });
+    return res.json();
+  },
+  async deleteInvite(id: number): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_URL}/auth/invites/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+    return res.json();
+  },
+
+  // Token do webhook do proprio usuario
+  async getWebhookToken(): Promise<{ token?: string }> {
+    const res = await fetch(`${API_URL}/auth/webhook-token`, { headers: getAuthHeaders() });
+    return res.json();
+  },
+  async regenerateWebhookToken(): Promise<{ token?: string }> {
+    const res = await fetch(`${API_URL}/auth/webhook-token/regenerate`, { method: "POST", headers: getAuthHeaders() });
     return res.json();
   },
 

@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree, Check, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree, Check, X, UserCog } from "lucide-react";
 import { Account, Category, Tag, api } from "../services/api.js";
 import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
 import { useToast, useConfirm } from "../components/Feedback.js";
+import { AccountPanel } from "../components/AccountPanel.js";
 
 interface SettingsProps {
   onBack: () => void;
@@ -10,6 +11,7 @@ interface SettingsProps {
   categories: Category[];
   tags: Tag[];
   onRefresh: () => Promise<void>;
+  isAdmin?: boolean;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -17,11 +19,12 @@ export const Settings: React.FC<SettingsProps> = ({
   accounts,
   categories,
   tags,
-  onRefresh
+  onRefresh,
+  isAdmin = false
 }) => {
   const toast = useToast();
   const confirm = useConfirm();
-  const [tab, setTab] = useState<"accounts" | "categories" | "tags">("accounts");
+  const [tab, setTab] = useState<"accounts" | "categories" | "tags" | "account">("accounts");
 
   // Ajuste de saldo direto na lista de contas (no lugar do prompt do navegador)
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
@@ -146,7 +149,7 @@ export const Settings: React.FC<SettingsProps> = ({
       </div>
 
       {/* Abas */}
-      <div className="grid grid-cols-3 gap-1.5 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl mb-6">
+      <div className="grid grid-cols-4 gap-1.5 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl mb-6">
         <button
           onClick={() => setTab("accounts")}
           className={`py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 ${
@@ -174,7 +177,18 @@ export const Settings: React.FC<SettingsProps> = ({
           <TagIcon className="w-3.5 h-3.5" />
           Tags
         </button>
+        <button
+          onClick={() => setTab("account")}
+          className={`py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 ${
+            tab === "account" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <UserCog className="w-3.5 h-3.5" />
+          Conta
+        </button>
       </div>
+
+      {tab === "account" && <AccountPanel isAdmin={isAdmin} />}
 
       {/* 1. ABA CONTAS E CARTÕES */}
       {tab === "accounts" && (

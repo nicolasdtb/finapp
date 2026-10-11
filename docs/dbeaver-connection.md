@@ -13,7 +13,7 @@ Como o FinApp roda com Docker na sua VM Linux conectada via **ZeroTier**, voce p
    - **Port:** `5432`
    - **Database:** `finapp`
    - **Username:** `finapp_user`
-   - **Password:** `finapp_password`
+   - **Password:** a `DB_PASSWORD` do arquivo `.env` da VM
 4. Clique em **Test Connection** (Testar Conexao).
 5. Clique em **Finish**.
 

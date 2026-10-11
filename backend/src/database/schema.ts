@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric, integer, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric, integer, serial, boolean } from "drizzle-orm/pg-core";
 
 // ==========================================
 // 1. USUARIOS (AUTENTICACAO & MULTI-USUARIO)
@@ -9,8 +9,21 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  isAdmin: boolean("is_admin").notNull().default(false),
+  webhookToken: text("webhook_token").unique(), // Token proprio do webhook do celular deste usuario
   createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"), // Soft Delete
+});
+
+// Convites de cadastro (uso unico, com validade), gerados por um administrador
+export const invitations = pgTable("invitations", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  createdBy: integer("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedBy: integer("used_by").references(() => users.id),
+  usedAt: timestamp("used_at"),
 });
 
 // ==========================================

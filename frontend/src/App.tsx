@@ -191,6 +191,7 @@ export function App() {
             categories={categories}
             tags={tags}
             onRefresh={() => loadData(true)}
+            isAdmin={!!currentUser?.isAdmin}
           />
         )}
       </main>
