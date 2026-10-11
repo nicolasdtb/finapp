@@ -10,7 +10,6 @@ import { api, Account, Category, Tag, Transaction, User, Budget } from "./servic
 import { LogOut, User as UserIcon } from "lucide-react";
 import { useToast } from "./components/Feedback.js";
 import { Cards } from "./pages/Cards.js";
-import { PullToRefresh } from "./components/PullToRefresh.js";
 
 export function App() {
   const toast = useToast();
@@ -164,7 +163,6 @@ export function App() {
         </div>
       </header>
 
-      <PullToRefresh onRefresh={() => loadData(true)} disabled={isModalOpen || isImportOpen || loading}>
       <main className="flex-1 w-full pb-20">
         {loading ? (
           <div className="max-w-md sm:max-w-2xl mx-auto p-4 space-y-3 animate-pulse" aria-label="Carregando">
@@ -232,7 +230,6 @@ export function App() {
           />
         )}
       </main>
-      </PullToRefresh>
 
       {/* Barra de Navegação Inferior Nativa (estilo Minhas Finanças) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/80 px-2 py-2">
