@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (tipos)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: Checagem de tipos (mesma do build da imagem)
+        run: npx tsc --noEmit
+
+  frontend:
+    name: Frontend (tipos e build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: Checagem de tipos
+        # Informativa por enquanto: o front nunca foi checado e pode ter avisos antigos.
+        # Depois de limpar os avisos, remova a linha abaixo para o CI passar a barrar.
+        continue-on-error: true
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

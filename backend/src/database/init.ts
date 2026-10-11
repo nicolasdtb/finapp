@@ -175,6 +175,9 @@ export async function initDatabase() {
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS import_id TEXT;
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_group_id TEXT;
       CREATE INDEX IF NOT EXISTS transactions_installment_group_idx ON transactions (installment_group_id);
+      CREATE INDEX IF NOT EXISTS transactions_user_date_idx ON transactions (user_id, date DESC) WHERE deleted_at IS NULL;
+      CREATE INDEX IF NOT EXISTS transaction_items_tx_idx ON transaction_items (transaction_id);
+      CREATE INDEX IF NOT EXISTS transaction_tags_tx_idx ON transaction_tags (transaction_id);
       CREATE TABLE IF NOT EXISTS transaction_item_tags (
         transaction_item_id INTEGER NOT NULL REFERENCES transaction_items(id),
         tag_id INTEGER NOT NULL REFERENCES tags(id),

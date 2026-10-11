@@ -54,23 +54,44 @@ export async function transactionRoutes(app: FastifyInstance) {
       .where(and(isNull(transactions.deletedAt), eq(transactions.userId, user.id)))
       .orderBy(desc(transactions.date), desc(transactions.id));
     
-    const items = await db.select().from(transactionItems).where(isNull(transactionItems.deletedAt));
-    const allTxTags = await db.select().from(transactionTags);
-    const allItemTags = await db.select().from(transactionItemTags);
+    // Itens e tags so dos lancamentos deste usuario (nao varre a tabela inteira)
+    const txIds = all.map(t => t.id);
+    let items: (typeof transactionItems.$inferSelect)[] = [];
+    let allTxTags: (typeof transactionTags.$inferSelect)[] = [];
+    let allItemTags: (typeof transactionItemTags.$inferSelect)[] = [];
+    if (txIds.length > 0) {
+      items = await db.select().from(transactionItems)
+        .where(and(inArray(transactionItems.transactionId, txIds), isNull(transactionItems.deletedAt)));
+      allTxTags = await db.select().from(transactionTags)
+        .where(inArray(transactionTags.transactionId, txIds));
+      const itemIds = items.map(i => i.id);
+      if (itemIds.length > 0) {
+        allItemTags = await db.select().from(transactionItemTags)
+          .where(inArray(transactionItemTags.transactionItemId, itemIds));
+      }
+    }
 
-    const txMap = all.map(t => {
-      const txTagIds = allTxTags.filter(tt => tt.transactionId === t.id).map(tt => tt.tagId);
-      const tItems = items.filter(i => i.transactionId === t.id).map(i => ({
+    const group = <T, K>(list: T[], key: (x: T) => K) => {
+      const m = new Map<K, T[]>();
+      for (const x of list) {
+        const k = key(x);
+        const cur = m.get(k);
+        if (cur) cur.push(x); else m.set(k, [x]);
+      }
+      return m;
+    };
+    const tagsByTx = group(allTxTags, tt => tt.transactionId);
+    const itemsByTx = group(items, i => i.transactionId);
+    const tagsByItem = group(allItemTags, it => it.transactionItemId);
+
+    const txMap = all.map(t => ({
+      ...t,
+      tagIds: (tagsByTx.get(t.id) ?? []).map(tt => tt.tagId),
+      items: (itemsByTx.get(t.id) ?? []).map(i => ({
         ...i,
-        tagIds: allItemTags.filter(it => it.transactionItemId === i.id).map(it => it.tagId)
-      }));
-
-      return {
-        ...t,
-        tagIds: txTagIds,
-        items: tItems
-      };
-    });
+        tagIds: (tagsByItem.get(i.id) ?? []).map(it => it.tagId)
+      }))
+    }));
 
     return reply.send(txMap);
   });

@@ -56,6 +56,27 @@ O **FinApp** resolve isso com uma arquitetura soberana e automatizada:
 * Agregação inteligente de tags: calcula o valor de tags na transação principal e tags de itens individuais sem dupla contagem.
 * Filtros combinados por busca textual, categoria, conta e tags em tempo real.
 
+### 💳 6. Cartões de Crédito, Faturas e Parcelamento
+* Cada cartão tem limite, dia de fechamento e dia de vencimento (se cair em fim de semana ou feriado nacional, vale o próximo dia útil).
+* Tela **Cartões** (abre ao tocar no card do cartão no Início): resumo, limite usado, faturas mês a mês (Aberta, Fechada, Vencida, Paga, Próxima), compras de cada fatura e pagamento da fatura com opção de desfazer.
+* O saldo do cartão é a **dívida**, separada do saldo em contas. Pagar a fatura é uma transferência de uma conta para o cartão, e não conta como despesa.
+* **Compras parceladas:** informe o valor total e o número de parcelas (até 24). O app cria uma parcela por fatura, e o total já consome o limite. Nos relatórios, cada parcela conta no mês dela.
+* Apagar uma parcela pergunta se é só aquela ou todas da compra.
+
+### 👥 7. Usuários, Convites e Webhook por Usuário
+* O primeiro usuário de uma instalação vazia vira administrador. Os demais entram por **convite** (código de uso único, válido por 48 horas), gerado em Configurações > Conta. Limite de 3 usuários.
+* Cada usuário tem o **próprio token de webhook** (Configurações > Conta), que pode ser regenerado. O webhook sem token é sempre recusado.
+* Cada conta pode ser ligada ao app do banco que envia as notificações (Nubank, Banco Inter, Bradesco): compra no cartão cai no cartão e Pix cai na conta.
+* O login tem limite de tentativas por IP e e-mail.
+
+### ✋ 8. Conforto no Celular
+* Nos lançamentos: deslize para a direita para confirmar um pendente e para a esquerda para excluir.
+* Confirmação em lote dos pendentes que já têm categoria.
+* Gráficos nos Relatórios: receitas e despesas dos últimos 6 ciclos, rosca por categoria e ritmo acumulado dos gastos contra o ciclo anterior.
+
+### 💾 9. Backup
+* Backup diário do banco, criptografado e enviado ao Google Drive, com retenção de 30 dias e alerta se falhar. Veja [docs/backup.md](docs/backup.md), que inclui o teste de restauração (`scripts/restore-test-finapp.sh`).
+
 ---
 
 ## 🛠️ Arquitetura e Stack Tecnológica
@@ -109,24 +130,21 @@ cd finapp
 ### 2. Configurar Variáveis de Ambiente
 Copie o arquivo de exemplo ou crie seu `.env` na raiz do projeto:
 
-```env
-POSTGRES_USER=finapp_user
-POSTGRES_PASSWORD=sua_senha_super_segura
-POSTGRES_DB=finapp
-PORT=3001
-JWT_SECRET=seu_jwt_secret_aleatorio
-NODE_ENV=production
+```bash
+cp .env.example .env
 ```
+Preencha pelo menos `DB_PASSWORD`, `JWT_SECRET` (gere com `openssl rand -hex 32`) e `ZT_IP` (o IP da VM na rede ZeroTier, onde o frontend é publicado). O arquivo `.env.example` explica cada variável. `WEBHOOK_TOKEN` só é usado na primeira subida, para o usuário mais antigo; depois cada usuário gerencia o próprio token no app.
 
 ### 3. Subir os Containers
 ```bash
 docker compose up -d --build
 ```
 
-Os seguintes serviços estarão ativos:
-- **Frontend / PWA:** `http://localhost` (ou `https://localhost` com certificados configurados)
-- **Backend API:** `http://localhost:3001`
-- **PostgreSQL:** `localhost:5432`
+Os serviços sobem assim:
+- **Frontend / PWA:** `https://<ZT_IP>` (porta 443, publicada só no IP do ZeroTier, com certificados em `./certs`).
+- **Backend API e PostgreSQL:** não são publicados fora do Docker. Só o nginx do frontend fala com o backend, pela rede interna.
+
+Ao abrir o app pela primeira vez, crie o primeiro usuário (ele vira administrador). Detalhes de deploy em [docs/deploy-vm.md](docs/deploy-vm.md) e [docs/zerotier-setup.md](docs/zerotier-setup.md).
 
 ---
 
@@ -134,13 +152,12 @@ Os seguintes serviços estarão ativos:
 
 Para receber as transações de compras e Pix instantaneamente:
 
-1. Clone e compile o [finapp-listener](https://github.com/nicolasdtb/finapp-listener) no Android Studio.
-2. Instale o APK no seu celular e conceda a permissão de **Acesso às Notificações**.
-3. No app listener, aponte a URL do webhook para:
-   ```
-   http://<IP_DA_SUA_VM>:3001/api/v1/webhooks/bank-notification
-   ```
+1. Baixe a APK mais recente na aba **Releases** do [finapp-listener](https://github.com/nicolasdtb/finapp-listener) e instale no celular.
+2. Conceda a permissão de **Acesso às Notificações** e escolha os bancos monitorados.
+3. Cole no app o **token do webhook** que aparece no FinApp em Configurações > Conta. A URL padrão já aponta para o servidor (`https://<ZT_IP>/api/v1/webhooks/bank-notification`).
 4. Pronto! Cada compra ou transferência recebida cairá imediatamente na aba de pendências do seu FinApp.
+
+O listener se atualiza pelo próprio app: ao abrir, ele consulta as Releases e, havendo versão nova, mostra o banner **Nova versão disponível** com o botão **Baixar e instalar**.
 
 ---
 
@@ -148,7 +165,9 @@ Para receber as transações de compras e Pix instantaneamente:
 
 - **Dados Soberanos:** Toda a base de dados reside no seu próprio disco rígido dentro do volume PostgreSQL.
 - **Isolamento de Usuários:** Todas as queries são estritamente filtradas pelo `user_id` extraído da sessão JWT criptografada.
-- **Rede Privada:** Recomendado rodar sob uma malha de rede segura como **ZeroTier** ou **Tailscale**, eliminando a necessidade de expor portas para a internet aberta.
+- **Rede Privada:** o frontend é publicado apenas no IP do **ZeroTier** da VM, sem expor portas para a internet aberta. Banco e backend ficam dentro da rede interna do Docker.
+- **Cadastro por convite e webhook por usuário:** só entra quem recebeu um convite do administrador, e cada usuário usa o próprio token de webhook.
+- **Backups criptografados** fora da VM, com teste de restauração documentado.
 
 ---
 
