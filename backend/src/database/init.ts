@@ -173,6 +173,8 @@ export async function initDatabase() {
     // Migração defensiva: adiciona coluna import_id se não existir
     await pool.query(`
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS import_id TEXT;
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_group_id TEXT;
+      CREATE INDEX IF NOT EXISTS transactions_installment_group_idx ON transactions (installment_group_id);
       CREATE TABLE IF NOT EXISTS transaction_item_tags (
         transaction_item_id INTEGER NOT NULL REFERENCES transaction_items(id),
         tag_id INTEGER NOT NULL REFERENCES tags(id),

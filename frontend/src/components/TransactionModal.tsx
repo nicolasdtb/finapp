@@ -16,7 +16,7 @@ interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
-  onDelete?: (id: number) => Promise<void>;
+  onDelete?: (id: number, scope?: "one" | "group") => Promise<void>;
   accounts: Account[];
   categories: Category[];
   tags: Tag[];
@@ -55,6 +55,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       : getTodayLocalDateString()
   );
   const [notes, setNotes] = useState(editingTransaction?.notes || "");
+  const [installments, setInstallments] = useState<number>(1);
+  const [showDeleteChoice, setShowDeleteChoice] = useState(false);
+  // Parcelamento: so em compra nova (despesa) em conta do tipo cartao de credito
+  const selectedAccount = accounts.find(a => a.id === accountId);
+  const installmentsAllowed = !editingTransaction && typeId === 2 && selectedAccount?.typeId === 2;
 
   // Detalhamento de Itens da Compra (Supermercado / Nota Fiscal)
   const [showItems, setShowItems] = useState(Boolean(editingTransaction?.items && editingTransaction.items.length > 0));
@@ -153,6 +158,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   // Sincroniza o estado do modal se o editingTransaction mudar
   useEffect(() => {
+    setInstallments(1);
+    setShowDeleteChoice(false);
     if (editingTransaction) {
       setTypeId(editingTransaction.typeId);
       setDescription(editingTransaction.description);
@@ -209,7 +216,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       categoryId: typeId === 3 ? undefined : categoryId,
       tagIds: tagIds.length > 0 ? tagIds : undefined,
       notes,
-      items: showItems && typeId !== 3 ? items : undefined
+      installments: installmentsAllowed && installments > 1 ? installments : undefined,
+      items: showItems && typeId !== 3 && !(installmentsAllowed && installments > 1) ? items : undefined
     });
     onClose();
   };
@@ -426,6 +434,31 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           )}
 
+          {installmentsAllowed && (
+            <div>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Parcelas</label>
+              <select
+                value={installments}
+                onChange={(e) => setInstallments(Number(e.target.value))}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+              >
+                {Array.from({ length: 24 }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>
+                    {n === 1
+                      ? "À vista (1x)"
+                      : `${n}x de ${formatCentsToBRL(Math.floor(amountCents / n))}`}
+                  </option>
+                ))}
+              </select>
+              {installments > 1 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  O valor informado é o total da compra. Uma parcela por fatura, nos meses seguintes.
+                  {showItems && items.length > 0 ? " Itens detalhados não são salvos em compras parceladas." : ""}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Data */}
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Data</label>
@@ -634,6 +667,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <button
                 type="button"
                 onClick={async () => {
+                  if (editingTransaction.installmentGroupId) {
+                    setShowDeleteChoice(true);
+                    return;
+                  }
                   const ok = await confirm({
                     title: "Excluir lançamento",
                     message: "Tem certeza que deseja excluir este lançamento?",
@@ -657,6 +694,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </div>
         </form>
       </div>
+
+      {showDeleteChoice && editingTransaction && onDelete && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDeleteChoice(false)} />
+          <div role="alertdialog" aria-modal="true" className="relative w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
+            <h3 className="text-base font-bold text-slate-100 mb-1">Excluir compra parcelada</h3>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Esta é a parcela {editingTransaction.installmentNumber} de {editingTransaction.totalInstallments}. O que deseja excluir?
+            </p>
+            <div className="flex flex-col gap-2 mt-5">
+              <button
+                onClick={() => { onDelete(editingTransaction.id, "one"); setShowDeleteChoice(false); onClose(); }}
+                className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold rounded-xl transition"
+              >
+                Só esta parcela
+              </button>
+              <button
+                onClick={() => { onDelete(editingTransaction.id, "group"); setShowDeleteChoice(false); onClose(); }}
+                className="py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold rounded-xl transition"
+              >
+                Todas as {editingTransaction.totalInstallments} parcelas
+              </button>
+              <button
+                onClick={() => setShowDeleteChoice(false)}
+                className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-xl transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Leitor de QR Code / NFC-e */}
       <QrScannerModal

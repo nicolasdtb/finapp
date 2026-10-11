@@ -87,6 +87,10 @@ export interface Transaction {
   rawBankNotification?: string;
   notes?: string;
   items?: TransactionItem[];
+  installments?: number; // so no envio: quantidade de parcelas de uma compra nova
+  installmentNumber?: number | null;
+  totalInstallments?: number | null;
+  installmentGroupId?: string | null;
 }
 
 export const api = {
@@ -228,8 +232,8 @@ export const api = {
     });
     return res.json();
   },
-  async deleteTransaction(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_URL}/transactions/${id}`, { method: "DELETE", headers: getAuthHeaders() });
+  async deleteTransaction(id: number, scope: "one" | "group" = "one"): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_URL}/transactions/${id}?scope=${scope}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
   },
   async confirmTransaction(id: number, updates: { categoryId?: number; accountId?: number; description?: string }): Promise<Transaction> {

@@ -123,10 +123,13 @@ export function buildInvoices(
   confirmed.forEach((_, r) => refSet.add(r));
   pending.forEach((_, r) => refSet.add(r));
   paymentByRef.forEach((_, r) => refSet.add(r));
-  const minRef = Array.from(refSet).sort()[0];
+  const sortedRefs = Array.from(refSet).sort();
+  const minRef = sortedRefs[0];
+  // Parcelas futuras criam faturas alem da proxima; elas tambem precisam aparecer (e entrar na soma)
+  const maxRef = sortedRefs[sortedRefs.length - 1];
 
   const refs: string[] = [];
-  for (let r = minRef; r <= nextRef; r = addMonthsToRef(r, 1)) refs.push(r);
+  for (let r = minRef; r <= maxRef; r = addMonthsToRef(r, 1)) refs.push(r);
 
   const invoices: Invoice[] = refs.map(ref => {
     const conf = confirmed.get(ref) ?? [];

@@ -111,6 +111,7 @@ export const transactions = pgTable("transactions", {
   recurrenceId: integer("recurrence_id").references(() => recurrenceTypes.id).default(1),
   installmentNumber: integer("installment_number"),
   totalInstallments: integer("total_installments"),
+  installmentGroupId: text("installment_group_id"), // mesma compra parcelada
 
   rawBankNotification: text("raw_bank_notification"),
   importId: text("import_id"),

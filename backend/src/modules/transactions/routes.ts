@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, transactionItems, transactionTags, transactionItemTags, accounts, categories, tags } from "../../database/schema.js";
 import { desc, eq, isNull, sql, and, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { splitInstallments, addMonthsClamped } from "./installments.js";
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -86,6 +88,7 @@ export async function transactionRoutes(app: FastifyInstance) {
       categoryId: z.number().nullable().optional(),
       destinationAccountId: z.number().nullable().optional(),
       notes: z.string().nullable().optional(),
+      installments: z.number().int().min(1).max(24).optional(),
       tagIds: z.array(z.number()).optional(),
       items: z.array(z.object({
         name: z.string().min(1),
@@ -98,6 +101,56 @@ export async function transactionRoutes(app: FastifyInstance) {
     });
 
     const data = schema.parse(request.body);
+
+    // Compra parcelada: so despesa em conta do tipo cartao de credito (typeId 2)
+    const installments = data.installments ?? 1;
+    if (installments > 1) {
+      if (data.typeId !== 2) {
+        return reply.status(400).send({ success: false, message: "Só despesas podem ser parceladas." });
+      }
+      const [acc] = await db.select().from(accounts)
+        .where(and(eq(accounts.id, data.accountId), eq(accounts.userId, user.id)))
+        .limit(1);
+      if (!acc || acc.typeId !== 2) {
+        return reply.status(400).send({ success: false, message: "Parcelamento só vale para cartão de crédito." });
+      }
+      const amounts = splitInstallments(data.amount, installments);
+      const baseDate = new Date(data.date);
+      const groupId = randomUUID();
+
+      const rows = await db.transaction(async (tx) => {
+        const out = [];
+        for (let i = 0; i < installments; i++) {
+          const [row] = await tx.insert(transactions).values({
+            description: `${data.description} (${i + 1}/${installments})`,
+            amount: amounts[i],
+            typeId: 2,
+            statusId: data.statusId,
+            date: addMonthsClamped(baseDate, i),
+            accountId: data.accountId,
+            categoryId: data.categoryId,
+            notes: data.notes,
+            installmentNumber: i + 1,
+            totalInstallments: installments,
+            installmentGroupId: groupId,
+            userId: user.id
+          }).returning();
+
+          if (data.tagIds && data.tagIds.length > 0) {
+            await tx.insert(transactionTags).values(
+              data.tagIds.map(tId => ({ transactionId: row.id, tagId: tId }))
+            );
+          }
+          // Divida e limite do cartao consideram o total da compra desde o inicio
+          if (row.statusId === 1) {
+            await applyBalanceEffect(tx, user.id, row, 1);
+          }
+          out.push(row);
+        }
+        return out;
+      });
+      return reply.status(201).send(rows[0]);
+    }
 
     // Tudo ou nada: lancamento, itens, tags e saldo na mesma transacao do banco.
     const created = await db.transaction(async (tx) => {
@@ -248,10 +301,12 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  // SOFT DELETE de transacao (marca deleted_at e estorna saldo)
+  // SOFT DELETE de transacao (marca deleted_at e estorna saldo).
+  // Com ?scope=group, apaga todas as parcelas da mesma compra parcelada.
   app.delete("/:id", async (request, reply) => {
     const user = request.user as { id: number };
     const { id } = z.object({ id: z.coerce.number() }).parse(request.params);
+    const { scope } = z.object({ scope: z.enum(["one", "group"]).default("one") }).parse(request.query);
 
     await db.transaction(async (tx) => {
       const [found] = await tx.select().from(transactions)
@@ -262,17 +317,30 @@ export async function transactionRoutes(app: FastifyInstance) {
       // Ja excluida (ou inexistente): nao estorna de novo
       if (!found || found.deletedAt) return;
 
-      if (found.statusId === 1) {
-        await applyBalanceEffect(tx, user.id, found, -1);
+      const targets = scope === "group" && found.installmentGroupId
+        ? await tx.select().from(transactions)
+            .where(and(
+              eq(transactions.installmentGroupId, found.installmentGroupId),
+              eq(transactions.userId, user.id),
+              isNull(transactions.deletedAt)
+            ))
+            .orderBy(transactions.id)
+            .for("update")
+        : [found];
+
+      for (const t of targets) {
+        if (t.statusId === 1) {
+          await applyBalanceEffect(tx, user.id, t, -1);
+        }
+
+        await tx.update(transactions)
+          .set({ deletedAt: new Date() })
+          .where(and(eq(transactions.id, t.id), eq(transactions.userId, user.id)));
+
+        await tx.update(transactionItems)
+          .set({ deletedAt: new Date() })
+          .where(eq(transactionItems.transactionId, t.id));
       }
-
-      await tx.update(transactions)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(transactions.id, id), eq(transactions.userId, user.id)));
-
-      await tx.update(transactionItems)
-        .set({ deletedAt: new Date() })
-        .where(eq(transactionItems.transactionId, id));
     });
 
     return reply.send({ success: true, message: "Transação excluída (soft delete)" });

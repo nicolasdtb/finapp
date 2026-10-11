@@ -95,9 +95,9 @@ export function App() {
     }
   };
 
-  const handleDeleteTransaction = async (id: number) => {
+  const handleDeleteTransaction = async (id: number, scope: "one" | "group" = "one") => {
     try {
-      await api.deleteTransaction(id);
+      await api.deleteTransaction(id, scope);
       await loadData(true); // reload in background
     } catch (err) {
       toast.error("Erro ao excluir lançamento.");
