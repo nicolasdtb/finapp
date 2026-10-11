@@ -13,7 +13,8 @@ import { invoiceRoutes } from "./modules/invoices/routes.js";
 import { importRoutes } from "./modules/import/routes.js";
 import { initDatabase } from "./database/init.js";
 
-const app = Fastify({ logger: true });
+// trustProxy: o backend so e acessado pelo nginx, que informa o IP real em X-Forwarded-For
+const app = Fastify({ logger: true, trustProxy: true });
 
 // Tratamento global de erros: respostas padronizadas e sem vazar detalhes internos.
 app.setErrorHandler((error, request, reply) => {

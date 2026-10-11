@@ -5,9 +5,51 @@ import { db } from "../../database/index.js";
 import { users, accounts, categories } from "../../database/schema.js";
 import { eq, isNull, count } from "drizzle-orm";
 
+// Limite de tentativas de login: apos MAX falhas em WINDOW, bloqueia aquele IP+e-mail por um tempo.
+const MAX_FAILED_LOGINS = 8;
+const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const failedLogins = new Map<string, { count: number; first: number }>();
+
+function pruneFailedLogins(now: number) {
+  if (failedLogins.size < 500) return;
+  for (const [key, v] of failedLogins) {
+    if (now - v.first > FAILED_LOGIN_WINDOW_MS) failedLogins.delete(key);
+  }
+}
+
+function isLoginBlocked(key: string): boolean {
+  const now = Date.now();
+  pruneFailedLogins(now);
+  const entry = failedLogins.get(key);
+  if (!entry) return false;
+  if (now - entry.first > FAILED_LOGIN_WINDOW_MS) {
+    failedLogins.delete(key);
+    return false;
+  }
+  return entry.count >= MAX_FAILED_LOGINS;
+}
+
+function registerFailedLogin(key: string) {
+  const now = Date.now();
+  const entry = failedLogins.get(key);
+  if (!entry || now - entry.first > FAILED_LOGIN_WINDOW_MS) {
+    failedLogins.set(key, { count: 1, first: now });
+  } else {
+    entry.count++;
+  }
+}
+
 export async function authRoutes(app: FastifyInstance) {
   // CADASTRO DE USUARIO (Limite maximo: 3 usuarios)
   app.post("/register", async (request, reply) => {
+    // Cadastro fechado por padrao: so abre quando ALLOW_REGISTER=true no .env
+    if (process.env.ALLOW_REGISTER !== "true") {
+      return reply.status(403).send({
+        success: false,
+        message: "Cadastro desativado nesta instância."
+      });
+    }
+
     const schema = z.object({
       name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
       email: z.string().email("E-mail inválido"),
@@ -85,11 +127,20 @@ export async function authRoutes(app: FastifyInstance) {
 
     const data = schema.parse(request.body);
 
+    const attemptKey = `${request.ip}|${data.email.toLowerCase()}`;
+    if (isLoginBlocked(attemptKey)) {
+      return reply.status(429).send({
+        success: false,
+        message: "Muitas tentativas de login. Aguarde alguns minutos e tente de novo."
+      });
+    }
+
     const [user] = await db.select().from(users)
       .where(eq(users.email, data.email.toLowerCase()))
       .limit(1);
 
     if (!user || user.deletedAt) {
+      registerFailedLogin(attemptKey);
       return reply.status(401).send({
         success: false,
         message: "E-mail ou senha incorretos."
@@ -98,12 +149,14 @@ export async function authRoutes(app: FastifyInstance) {
 
     const isValidPassword = await bcrypt.compare(data.password, user.passwordHash);
     if (!isValidPassword) {
+      registerFailedLogin(attemptKey);
       return reply.status(401).send({
         success: false,
         message: "E-mail ou senha incorretos."
       });
     }
 
+    failedLogins.delete(attemptKey);
     const token = app.jwt.sign({ id: user.id, name: user.name, email: user.email });
 
     return reply.send({
