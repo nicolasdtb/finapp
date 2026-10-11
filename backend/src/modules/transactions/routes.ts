@@ -37,6 +37,34 @@ export async function applyBalanceEffect(tx: Tx, userId: number, t: BalanceEffec
   }
 }
 
+// Compra parcelada vinda de notificacao: as parcelas nascem pendentes. Ao confirmar uma delas,
+// as demais PENDENTES do mesmo grupo sao confirmadas juntas (e o saldo/limite do cartao muda uma vez por parcela).
+// Retorna os ids confirmados por aqui, para o chamador nao confirmar de novo.
+export async function confirmSiblings(tx: Tx, userId: number, row: { id: number; installmentGroupId: string | null }): Promise<number[]> {
+  if (!row.installmentGroupId) return [];
+  const siblings = await tx.select().from(transactions)
+    .where(and(
+      eq(transactions.installmentGroupId, row.installmentGroupId),
+      eq(transactions.userId, userId),
+      eq(transactions.statusId, 2),
+      isNull(transactions.deletedAt)
+    ))
+    .orderBy(transactions.id)
+    .for("update");
+
+  const done: number[] = [];
+  for (const sib of siblings) {
+    if (sib.id === row.id) continue;
+    const [updated] = await tx.update(transactions)
+      .set({ statusId: 1, updatedAt: new Date() })
+      .where(and(eq(transactions.id, sib.id), eq(transactions.userId, userId)))
+      .returning();
+    await applyBalanceEffect(tx, userId, updated, 1);
+    done.push(sib.id);
+  }
+  return done;
+}
+
 export async function transactionRoutes(app: FastifyInstance) {
   // Hook de autenticacao obrigatoria
   app.addHook("preHandler", async (request, reply) => {
@@ -312,6 +340,10 @@ export async function transactionRoutes(app: FastifyInstance) {
       if (row.statusId === 1) {
         await applyBalanceEffect(tx, user.id, row, 1);
       }
+      // Pendente -> confirmado numa compra parcelada: confirma as outras parcelas juntas
+      if (oldTx.statusId === 2 && row.statusId === 1) {
+        await confirmSiblings(tx, user.id, row);
+      }
 
       return row;
     });
@@ -385,14 +417,23 @@ export async function transactionRoutes(app: FastifyInstance) {
         .orderBy(transactions.id)
         .for("update");
 
+      let count = 0;
+      const alreadyDone = new Set<number>();
       for (const old of pendingRows) {
+        // Parcela ja confirmada junto com outra do mesmo grupo
+        if (alreadyDone.has(old.id)) continue;
         const [row] = await tx.update(transactions)
           .set({ statusId: 1, updatedAt: new Date() })
           .where(and(eq(transactions.id, old.id), eq(transactions.userId, user.id)))
           .returning();
         await applyBalanceEffect(tx, user.id, row, 1);
+        count++;
+        for (const sibId of await confirmSiblings(tx, user.id, row)) {
+          alreadyDone.add(sibId);
+          count++;
+        }
       }
-      return pendingRows.length;
+      return count;
     });
 
     return reply.send({ success: true, confirmed });
@@ -428,6 +469,7 @@ export async function transactionRoutes(app: FastifyInstance) {
       // So mexe no saldo se estava pendente
       if (oldTx.statusId === 2) {
         await applyBalanceEffect(tx, user.id, row, 1);
+        await confirmSiblings(tx, user.id, row);
       }
 
       return row;

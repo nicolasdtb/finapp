@@ -3,7 +3,8 @@ import { z } from "zod";
 import { db } from "../../database/index.js";
 import { transactions, accounts, users, categories } from "../../database/schema.js";
 import { eq, isNull, isNotNull, and, gte, sql, desc } from "drizzle-orm";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, randomUUID } from "node:crypto";
+import { splitInstallments, addMonthsClamped } from "../transactions/installments.js";
 
 // Compara segredos sem vazar informacao pelo tempo de resposta.
 function safeEqual(a: string, b: string): boolean {
@@ -43,6 +44,12 @@ export function parseBankNotification(appName: string, text: string) {
   let establishment: string = "Despesa Bancária";
   let typeId: number = 2; // 1 = Receita (Income), 2 = Despesa (Expense)
 
+  // Parcelamento: "em 3x", "3x sem juros" ou "3 parcelas". "em 1x" e a vista.
+  const instMatch = text.match(/\bem\s+(\d{1,2})\s*x\b/i) || text.match(/\b(\d{1,2})\s+parcelas\b/i);
+  const parsedInstallments = instMatch ? parseInt(instMatch[1], 10) : 1;
+  // Tira o trecho "em Nx" para ele nao ser confundido com o nome do estabelecimento
+  text = text.replace(/\bem\s+\d{1,2}\s*x\b/gi, " ").replace(/\s{2,}/g, " ").trim();
+
   const lowerText = text.toLowerCase();
 
   // 1. Detecta se é RECEITA (Pix recebido, transferência recebida, depósito, reembolso)
@@ -76,10 +83,14 @@ export function parseBankNotification(appName: string, text: string) {
     const pixMatch = text.match(/(?:para|destinat[aá]rio)\s+([^,\.]+?)(?:\s+(?:pelo|via|com|no valor)|\.|$)/i);
     // Compra em Estabelecimento
     const estabMatch = text.match(/(?:em|no|na)\s+([^,\.]+?)(?:\s+(?:aprovad[oa]|por aproxima[cç][aã]o|com|no valor)|\.|$)/i);
+    // "... APROVADO em 99Food." (formato do Nubank): o estabelecimento vem depois de "aprovado em"
+    const approvedMatch = text.match(/aprovad[oa]\s+(?:em|no|na)\s+([^,\.]+?)(?:\s+(?:no valor|com|por aproxima[cç][aã]o)|\.|$)/i);
     const directMatch = text.match(/compra\s+(?:de\s+R\$\s*[\d\.,]+\s+)?(?:aprovada\s+)?(?:em|no|na)\s+([^,\.]+?)(?:\.|$)/i);
 
     if (pixMatch && pixMatch[1] && (lowerText.includes("transfer") || lowerText.includes("pix"))) {
       establishment = `Pix: ${pixMatch[1].trim()}`;
+    } else if (approvedMatch && approvedMatch[1]) {
+      establishment = approvedMatch[1].trim();
     } else if (directMatch && directMatch[1]) {
       establishment = directMatch[1].trim();
     } else if (estabMatch && estabMatch[1]) {
@@ -101,6 +112,8 @@ export function parseBankNotification(appName: string, text: string) {
     amount,
     establishment,
     typeId,
+    // So despesa pode ser parcelada; valores absurdos sao ignorados
+    installments: typeId === 2 && parsedInstallments > 1 && parsedInstallments <= 24 ? parsedInstallments : 1,
     originalText: text,
     bankHint: appName
   };
@@ -224,23 +237,39 @@ export async function webhookRoutes(app: FastifyInstance) {
       const matchedAccount = bankAccount || userAccounts[0];
       const suggestedCategoryId = await suggestCategory(userId, parsed.establishment, parsed.typeId);
 
-      // 3. Salva a transação como PENDENTE associada estritamente ao usuário
-      const [newTx] = await db.insert(transactions).values({
-        description: parsed.establishment,
-        amount: parsed.amount.toFixed(2),
-        typeId: parsed.typeId, // 1 = RECEITA (Pix recebido), 2 = DESPESA (Compra/Pix enviado)
-        statusId: 2,           // 2 = PENDING_CONFIRMATION
-        date: new Date(),
-        accountId: matchedAccount.id,
-        categoryId: suggestedCategoryId,
-        userId: userId,
-        notes: bankAccount
-          ? null
-          : `Conta não identificada automaticamente para "${notif.app_name}". Confira a conta antes de confirmar.`,
-        rawBankNotification: rawText
-      }).returning();
+      // Compra parcelada no cartao: cria uma parcela PENDENTE por fatura. O valor da notificacao e
+      // tratado como o total da compra; confirmar uma parcela confirma todas as do mesmo grupo.
+      const splitInto = parsed.installments > 1 && matchedAccount.typeId === 2 ? parsed.installments : 1;
+      const amounts = splitInstallments(parsed.amount.toFixed(2), splitInto);
+      const groupId = splitInto > 1 ? randomUUID() : null;
+      const baseDate = new Date();
 
-      createdTxs.push(newTx);
+      for (let i = 0; i < splitInto; i++) {
+        const notes = !bankAccount
+          ? `Conta não identificada automaticamente para "${notif.app_name}". Confira a conta antes de confirmar.`
+          : splitInto > 1 && i === 0
+            ? `Compra parcelada em ${splitInto}x. O valor da notificação (R$ ${parsed.amount.toFixed(2).replace(".", ",")}) foi tratado como o total. Se for o valor da parcela, exclua todas e lance de novo.`
+            : null;
+
+        // 3. Salva a transação como PENDENTE associada estritamente ao usuário
+        const [newTx] = await db.insert(transactions).values({
+          description: splitInto > 1 ? `${parsed.establishment} (${i + 1}/${splitInto})` : parsed.establishment,
+          amount: amounts[i],
+          typeId: parsed.typeId, // 1 = RECEITA (Pix recebido), 2 = DESPESA (Compra/Pix enviado)
+          statusId: 2,           // 2 = PENDING_CONFIRMATION
+          date: addMonthsClamped(baseDate, i),
+          accountId: matchedAccount.id,
+          categoryId: suggestedCategoryId,
+          installmentNumber: splitInto > 1 ? i + 1 : null,
+          totalInstallments: splitInto > 1 ? splitInto : null,
+          installmentGroupId: groupId,
+          userId: userId,
+          notes,
+          rawBankNotification: rawText
+        }).returning();
+
+        createdTxs.push(newTx);
+      }
     }
 
     if (createdTxs.length === 0 && duplicates > 0) {
