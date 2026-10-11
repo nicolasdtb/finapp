@@ -93,7 +93,7 @@ export const Settings: React.FC<SettingsProps> = ({
     await api.createAccount({
       name: newAccName,
       typeId: newAccType,
-      balance: centsToDecimalString(newAccBalanceCents),
+      balance: centsToDecimalString(isCard && newAccBalanceCents > 0 ? -newAccBalanceCents : newAccBalanceCents),
       color: newAccColor,
       icon: isCard ? "credit-card" : "wallet",
       ...(isCard ? {
@@ -255,6 +255,8 @@ export const Settings: React.FC<SettingsProps> = ({
                 onChange={(e) => setNewAccName(e.target.value)}
                 className="col-span-2 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
               />
+              <span className="text-[11px] font-semibold text-slate-400 -mb-1">Tipo</span>
+              <span className="text-[11px] font-semibold text-slate-400 -mb-1">{newAccType === 2 ? "Dívida atual (quanto já deve)" : "Saldo inicial"}</span>
               <select
                 value={newAccType}
                 onChange={(e) => setNewAccType(Number(e.target.value))}
@@ -279,6 +281,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
             {newAccType === 2 && (
               <div className="grid grid-cols-3 gap-2">
+                <span className="col-span-3 text-[11px] font-semibold text-slate-400 -mb-1">Limite do cartão</span>
                 <div className="relative col-span-3">
                   <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
                   <input
@@ -291,6 +294,9 @@ export const Settings: React.FC<SettingsProps> = ({
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-8 pr-2.5 text-xs text-white"
                   />
                 </div>
+                <span className="text-[11px] font-semibold text-slate-400 -mb-1">Dia de fechamento</span>
+                <span className="text-[11px] font-semibold text-slate-400 -mb-1">Dia de vencimento</span>
+                <span></span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -314,7 +320,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   className="col-span-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
                 />
                 <p className="col-span-3 text-[11px] text-slate-500">
-                  Compras feitas depois do dia de fechamento entram na fatura do mês seguinte.
+                  Dívida atual: deixe 0 num cartão novo, ou informe quanto você já deve nele. Compras feitas depois do dia de fechamento entram na fatura do mês seguinte.
                 </p>
               </div>
             )}
@@ -385,6 +391,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
                 {editingCardId === acc.id && (
                   <div className="w-full grid grid-cols-3 gap-2">
+                    <span className="col-span-3 text-[11px] font-semibold text-slate-400 -mb-1">Limite do cartão</span>
                     <div className="relative col-span-3">
                       <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
                       <input
@@ -395,6 +402,9 @@ export const Settings: React.FC<SettingsProps> = ({
                         className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-8 pr-2.5 text-sm text-white outline-none focus:border-blue-500"
                       />
                     </div>
+                    <span className="text-[11px] font-semibold text-slate-400 -mb-1">Dia de fechamento</span>
+                    <span className="text-[11px] font-semibold text-slate-400 -mb-1">Dia de vencimento</span>
+                    <span></span>
                     <input
                       type="number"
                       inputMode="numeric"
