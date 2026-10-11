@@ -111,6 +111,20 @@ export function App() {
     }
   };
 
+  const handleConfirmBatch = async (ids: number[]) => {
+    try {
+      const res = await api.confirmTransactionsBatch(ids);
+      if (!res.success) {
+        toast.error(res.message || "Erro ao confirmar lançamentos.");
+        return;
+      }
+      toast.success(`${res.confirmed ?? 0} lançamento(s) confirmado(s).`);
+      await loadData(true);
+    } catch (err) {
+      toast.error("Erro ao confirmar lançamentos.");
+    }
+  };
+
   // Se não estiver logado, exibe a tela de login/cadastro
   if (!loading && !currentUser) {
     return (
@@ -167,6 +181,7 @@ export function App() {
               setIsModalOpen(true);
             }}
             onConfirmPending={handleConfirmPending}
+            onConfirmBatch={handleConfirmBatch}
             onOpenSettings={() => setCurrentView("settings")}
             onOpenImport={() => setIsImportOpen(true)}
           />

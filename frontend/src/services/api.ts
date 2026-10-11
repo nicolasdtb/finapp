@@ -231,6 +231,15 @@ export const api = {
     return res.json();
   },
 
+  async confirmTransactionsBatch(ids: number[]): Promise<{ success: boolean; confirmed?: number; message?: string }> {
+    const res = await fetch(`${API_URL}/transactions/confirm-batch`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
+    });
+    return res.json();
+  },
+
   // Orçamentos e Metas
   async getBudgets(): Promise<Budget[]> {
     const res = await fetch(`${API_URL}/budgets`, { headers: getAuthHeaders() });

@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
-import { transactions, accounts, users } from "../../database/schema.js";
-import { eq, isNull, and, gte } from "drizzle-orm";
+import { transactions, accounts, users, categories } from "../../database/schema.js";
+import { eq, isNull, isNotNull, and, gte, sql, desc } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 
 // Compara segredos sem vazar informacao pelo tempo de resposta.
@@ -10,6 +10,28 @@ function safeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
   return ba.length === bb.length && timingSafeEqual(ba, bb);
+}
+
+// Sugere a categoria pelo historico: a mais usada pelo usuario em lancamentos confirmados
+// com a mesma descricao (ex.: "Pix: Fulano", "Padaria X") e do mesmo tipo (receita/despesa).
+async function suggestCategory(userId: number, description: string, typeId: number): Promise<number | null> {
+  const [best] = await db
+    .select({ categoryId: transactions.categoryId, uses: sql<number>`count(*)` })
+    .from(transactions)
+    .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(and(
+      eq(transactions.userId, userId),
+      eq(transactions.statusId, 1),
+      eq(transactions.typeId, typeId),
+      isNull(transactions.deletedAt),
+      isNull(categories.deletedAt),
+      isNotNull(transactions.categoryId),
+      sql`lower(${transactions.description}) = lower(${description})`
+    ))
+    .groupBy(transactions.categoryId)
+    .orderBy(desc(sql`count(*)`))
+    .limit(1);
+  return best?.categoryId ?? null;
 }
 
 export function parseBankNotification(appName: string, text: string) {
@@ -182,6 +204,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       );
       // Sem conta do banco: usa a primeira, mas avisa na observacao para o usuario conferir ao confirmar
       const matchedAccount = bankAccount || userAccounts[0];
+      const suggestedCategoryId = await suggestCategory(userId, parsed.establishment, parsed.typeId);
 
       // 3. Salva a transação como PENDENTE associada estritamente ao usuário
       const [newTx] = await db.insert(transactions).values({
@@ -191,6 +214,7 @@ export async function webhookRoutes(app: FastifyInstance) {
         statusId: 2,           // 2 = PENDING_CONFIRMATION
         date: new Date(),
         accountId: matchedAccount.id,
+        categoryId: suggestedCategoryId,
         userId: userId,
         notes: bankAccount
           ? null

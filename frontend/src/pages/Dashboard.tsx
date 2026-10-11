@@ -27,6 +27,7 @@ interface DashboardProps {
   onNewTransaction: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onConfirmPending: (tx: Transaction) => void;
+  onConfirmBatch: (ids: number[]) => Promise<void> | void;
   onOpenSettings: () => void;
   onOpenImport: () => void;
 }
@@ -39,6 +40,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNewTransaction, 
   onEditTransaction,
   onConfirmPending,
+  onConfirmBatch,
   onOpenSettings,
   onOpenImport
 }) => {
@@ -106,6 +108,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .filter(matchesSearchAndFilter)
       .sort(sortByNewestFirst);
   }, [transactions, searchTerm, selectedCategoryFilter, selectedAccountFilter, selectedTagFilter]);
+
+  // Pendentes que ja tem categoria (sugerida pelo historico): podem ser confirmadas em lote
+  const categorizedPendingIds = useMemo(
+    () => pendingTransactions.filter(t => t.categoryId).map(t => t.id),
+    [pendingTransactions]
+  );
 
   // Transações confirmadas filtradas por busca, categoria, conta, tag E pelo período/ciclo selecionado
   const confirmedTransactions = useMemo(() => {
@@ -396,6 +404,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
         </div>
+
+        {activeTab === "pending" && categorizedPendingIds.length > 0 && (
+          <button
+            onClick={() => onConfirmBatch(categorizedPendingIds)}
+            className="w-full mb-3 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white text-sm font-bold rounded-xl transition"
+          >
+            Confirmar {categorizedPendingIds.length} já categorizada{categorizedPendingIds.length > 1 ? "s" : ""}
+          </button>
+        )}
 
         <div className="space-y-2.5">
           {(activeTab === "all" ? confirmedTransactions : pendingTransactions).length === 0 ? (

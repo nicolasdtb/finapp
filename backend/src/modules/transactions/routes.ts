@@ -278,6 +278,37 @@ export async function transactionRoutes(app: FastifyInstance) {
     return reply.send({ success: true, message: "Transação excluída (soft delete)" });
   });
 
+  // Confirmar varias transacoes pendentes de uma vez (tudo ou nada, saldo aplicado uma vez por lancamento)
+  app.post("/confirm-batch", async (request, reply) => {
+    const user = request.user as { id: number };
+    const { ids } = z.object({
+      ids: z.array(z.number().int()).min(1).max(200)
+    }).parse(request.body);
+
+    const confirmed = await db.transaction(async (tx) => {
+      const pendingRows = await tx.select().from(transactions)
+        .where(and(
+          inArray(transactions.id, ids),
+          eq(transactions.userId, user.id),
+          isNull(transactions.deletedAt),
+          eq(transactions.statusId, 2)
+        ))
+        .orderBy(transactions.id)
+        .for("update");
+
+      for (const old of pendingRows) {
+        const [row] = await tx.update(transactions)
+          .set({ statusId: 1, updatedAt: new Date() })
+          .where(and(eq(transactions.id, old.id), eq(transactions.userId, user.id)))
+          .returning();
+        await applyBalanceEffect(tx, user.id, row, 1);
+      }
+      return pendingRows.length;
+    });
+
+    return reply.send({ success: true, confirmed });
+  });
+
   // Confirmar transacao pendente de notificacao bancaria
   app.patch("/:id/confirm", async (request, reply) => {
     const user = request.user as { id: number };
