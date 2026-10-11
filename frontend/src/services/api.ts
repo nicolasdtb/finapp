@@ -28,6 +28,7 @@ export interface Account {
   creditLimit?: string;
   closingDay?: number;
   dueDay?: number;
+  notificationBank?: string | null;
 }
 
 export interface Category {

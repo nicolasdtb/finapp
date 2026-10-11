@@ -68,6 +68,7 @@ export const accounts = pgTable("accounts", {
   creditLimit: numeric("credit_limit", { precision: 12, scale: 2 }),
   closingDay: integer("closing_day"),
   dueDay: integer("due_day"),
+  notificationBank: text("notification_bank"), // App do banco que envia notificacoes para esta conta (ex.: "Nubank")
   userId: integer("user_id").references(() => users.id), // Criador da conta
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

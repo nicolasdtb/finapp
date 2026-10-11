@@ -194,6 +194,17 @@ export async function initDatabase() {
         used_at TIMESTAMP
       );
     `);
+    // Conta que recebe as notificacoes de cada banco (criada uma vez; contas atuais ganham o banco pelo nome)
+    const hasNotificationBank = await pool.query(
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'notification_bank'"
+    );
+    if (hasNotificationBank.rowCount === 0) {
+      await pool.query("ALTER TABLE accounts ADD COLUMN notification_bank TEXT");
+      const plain = "translate(lower(name), 'áàâãéêíóôõúç', 'aaaaeeiooouc')";
+      await pool.query(`UPDATE accounts SET notification_bank = 'Nubank' WHERE ${plain} LIKE '%nubank%' OR ${plain} LIKE '%nu bank%'`);
+      await pool.query(`UPDATE accounts SET notification_bank = 'Banco Inter' WHERE notification_bank IS NULL AND ${plain} LIKE '%inter%'`);
+      await pool.query(`UPDATE accounts SET notification_bank = 'Bradesco' WHERE notification_bank IS NULL AND ${plain} LIKE '%bradesco%'`);
+    }
     // Pagamentos de fatura de cartao
     await pool.query(`
       CREATE TABLE IF NOT EXISTS card_invoice_payments (

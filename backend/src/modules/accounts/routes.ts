@@ -32,6 +32,7 @@ export async function accountRoutes(app: FastifyInstance) {
       creditLimit: z.string().regex(/^\d+(\.\d{1,2})?$/, "Limite inválido").optional(),
       closingDay: z.number().int().min(1).max(31).optional(),
       dueDay: z.number().int().min(1).max(31).optional(),
+      notificationBank: z.string().nullable().optional(),
     });
 
     const data = schema.parse(request.body);
@@ -54,6 +55,7 @@ export async function accountRoutes(app: FastifyInstance) {
       creditLimit: z.string().regex(/^\d+(\.\d{1,2})?$/, "Limite inválido").optional(),
       closingDay: z.number().int().min(1).max(31).optional(),
       dueDay: z.number().int().min(1).max(31).optional(),
+      notificationBank: z.string().nullable().optional(),
     });
 
     const data = schema.parse(request.body);

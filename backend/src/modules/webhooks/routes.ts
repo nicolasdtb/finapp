@@ -12,6 +12,10 @@ function safeEqual(a: string, b: string): boolean {
   return ba.length === bb.length && timingSafeEqual(ba, bb);
 }
 
+// Compara nomes de banco ignorando acento, caixa e o prefixo "Banco " ("Banco Inter" == "inter")
+const normBank = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^banco\s+/, "").trim();
+
 // Sugere a categoria pelo historico: a mais usada pelo usuario em lancamentos confirmados
 // com a mesma descricao (ex.: "Pix: Fulano", "Padaria X") e do mesmo tipo (receita/despesa).
 async function suggestCategory(userId: number, description: string, typeId: number): Promise<number | null> {
@@ -198,10 +202,24 @@ export async function webhookRoutes(app: FastifyInstance) {
         continue;
       }
 
-      const bankNameLower = notif.app_name.toLowerCase();
-      const bankAccount = userAccounts.find(acc => 
-        acc.name.toLowerCase().includes(bankNameLower) || bankNameLower.includes(acc.name.toLowerCase())
-      );
+      // Contas configuradas para receber as notificacoes deste banco (Configuracoes > Contas)
+      const bankKey = normBank(notif.app_name);
+      const candidates = userAccounts.filter(acc => acc.notificationBank && normBank(acc.notificationBank) === bankKey);
+      let bankAccount: (typeof userAccounts)[number] | undefined = candidates[0];
+      if (candidates.length > 1) {
+        // Banco com conta e cartao: compra vai para o cartao; Pix e transferencia, para a conta
+        const looksLikeCard = parsed.typeId === 2 && /compra|cart[aã]o|cr[eé]dito/i.test(`${notif.title} ${notif.text}`);
+        const cards = candidates.filter(acc => acc.typeId === 2);
+        const others = candidates.filter(acc => acc.typeId !== 2);
+        bankAccount = looksLikeCard ? (cards[0] ?? others[0]) : (others[0] ?? cards[0]);
+      }
+      // Sem configuracao: tenta pelo nome da conta (sem diferenciar acento)
+      if (!bankAccount) {
+        bankAccount = userAccounts.find(acc => {
+          const accKey = normBank(acc.name);
+          return accKey.includes(bankKey) || bankKey.includes(accKey);
+        });
+      }
       // Sem conta do banco: usa a primeira, mas avisa na observacao para o usuario conferir ao confirmar
       const matchedAccount = bankAccount || userAccounts[0];
       const suggestedCategoryId = await suggestCategory(userId, parsed.establishment, parsed.typeId);

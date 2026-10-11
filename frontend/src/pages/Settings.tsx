@@ -54,6 +54,16 @@ export const Settings: React.FC<SettingsProps> = ({
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#64748B");
 
+  const handleNotificationBank = async (acc: Account, value: string) => {
+    const res: any = await api.updateAccount(acc.id, { notificationBank: value || null });
+    if (res && res.id) {
+      toast.success(value ? `Notificações do ${value} vão para "${acc.name}".` : `"${acc.name}" não recebe mais notificações.`);
+      await onRefresh();
+    } else {
+      toast.error("Não foi possível salvar.");
+    }
+  };
+
   const validDay = (n: number) => Number.isInteger(n) && n >= 1 && n <= 31;
 
   const startCardEdit = (acc: Account) => {
@@ -387,6 +397,21 @@ export const Settings: React.FC<SettingsProps> = ({
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
+                </div>
+
+                <div className="w-full flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">Notificações do app:</span>
+                  <select
+                    value={acc.notificationBank ?? ""}
+                    onChange={(e) => handleNotificationBank(acc, e.target.value)}
+                    aria-label={`App do banco que envia notificações para ${acc.name}`}
+                    className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white"
+                  >
+                    <option value="">Nenhum</option>
+                    <option value="Nubank">Nubank</option>
+                    <option value="Banco Inter">Banco Inter</option>
+                    <option value="Bradesco">Bradesco</option>
+                  </select>
                 </div>
 
                 {editingCardId === acc.id && (
