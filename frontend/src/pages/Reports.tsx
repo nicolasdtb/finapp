@@ -13,6 +13,8 @@ import {
 import { Transaction, Category, Account, Tag } from "../services/api.js";
 import { PeriodSelector } from "../components/PeriodSelector.js";
 import { calculateFinancialPeriods } from "../utils/periodCalculator.js";
+import { CycleBars, Donut, PaceLine, CycleBarDatum } from "../components/Charts.js";
+import { totalsInRange, cumulativeExpenseByDay, daysInclusive } from "../utils/reportSeries.js";
 
 interface ReportsProps {
   transactions: Transaction[];
@@ -54,6 +56,37 @@ export const Reports: React.FC<ReportsProps> = ({ transactions, categories, acco
 
   const netBalance = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? ((netBalance / totalIncome) * 100).toFixed(0) : "0";
+
+  // Receitas x despesas dos ultimos 6 ciclos (termina no ciclo selecionado)
+  const cycleBars = useMemo<CycleBarDatum[]>(() => {
+    const out: CycleBarDatum[] = [];
+    for (let k = 5; k >= 0; k--) {
+      const p = calculateFinancialPeriods(transactions, categories, cycleOffset - k);
+      const totals = totalsInRange(transactions, p.startDate, p.endDate);
+      out.push({
+        label: p.startDate.toLocaleDateString("pt-BR", { month: "short" }).replace(".", ""),
+        range: p.label,
+        income: totals.income,
+        expense: totals.expense,
+        current: k === 0,
+      });
+    }
+    return out;
+  }, [transactions, categories, cycleOffset]);
+
+  // Gasto acumulado dia a dia: ciclo selecionado x ciclo anterior
+  const pace = useMemo(() => {
+    const prevPeriod = calculateFinancialPeriods(transactions, categories, cycleOffset - 1);
+    const now = new Date();
+    const inProgress = now >= currentPeriod.startDate && now <= currentPeriod.endDate;
+    const lastDay = inProgress ? daysInclusive(currentPeriod.startDate, now) - 1 : undefined;
+    return {
+      current: cumulativeExpenseByDay(transactions, currentPeriod.startDate, currentPeriod.endDate, lastDay),
+      previous: cumulativeExpenseByDay(transactions, prevPeriod.startDate, prevPeriod.endDate),
+      totalDays: daysInclusive(currentPeriod.startDate, currentPeriod.endDate),
+      previousRange: prevPeriod.label,
+    };
+  }, [transactions, categories, cycleOffset, currentPeriod]);
 
   // Agrupamento por Categoria
   const categoryStats = useMemo(() => {
@@ -211,6 +244,16 @@ export const Reports: React.FC<ReportsProps> = ({ transactions, categories, acco
         </div>
       </div>
 
+      <CycleBars data={cycleBars} />
+
+      <PaceLine
+        current={pace.current}
+        previous={pace.previous}
+        totalDays={pace.totalDays}
+        currentRange={currentPeriod.label}
+        previousRange={pace.previousRange}
+      />
+
       {/* Alternador Despesas vs Receitas */}
       <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl mb-3 border border-slate-800">
         <button
@@ -267,20 +310,10 @@ export const Reports: React.FC<ReportsProps> = ({ transactions, categories, acco
               </span>
             </div>
 
-            {/* Barra multicolorida */}
-            <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden flex mb-5">
-              {categoryStats.map((item, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    width: `${item.percentage}%`,
-                    backgroundColor: item.category.color || "#3B82F6"
-                  }}
-                  title={`${item.category.name}: ${item.percentage.toFixed(1)}%`}
-                  className="h-full transition-all hover:opacity-80"
-                />
-              ))}
-            </div>
+            <Donut
+              slices={categoryStats.map(i => ({ name: i.category.name, color: i.category.color || "#3B82F6", amount: i.amount }))}
+              total={reportType === "expenses" ? totalExpenses : totalIncome}
+            />
 
             <div className="space-y-3.5">
               {categoryStats.length === 0 ? (
