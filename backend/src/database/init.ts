@@ -174,6 +174,8 @@ export async function initDatabase() {
     await pool.query(`
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS import_id TEXT;
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_group_id TEXT;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+      UPDATE accounts SET sort_order = id WHERE sort_order = 0;
       CREATE INDEX IF NOT EXISTS transactions_installment_group_idx ON transactions (installment_group_id);
       CREATE INDEX IF NOT EXISTS transactions_user_date_idx ON transactions (user_id, date DESC) WHERE deleted_at IS NULL;
       CREATE INDEX IF NOT EXISTS transaction_items_tx_idx ON transaction_items (transaction_id);

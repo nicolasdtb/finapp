@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree, Check, X, UserCog } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CreditCard, Tag as TagIcon, FolderTree, Check, X, UserCog, ChevronUp, ChevronDown } from "lucide-react";
 import { Account, Category, Tag, api } from "../services/api.js";
 import { formatCentsToBRL, parseInputToCents, centsToDecimalString } from "../utils/currency.js";
 import { useToast, useConfirm } from "../components/Feedback.js";
@@ -25,6 +25,24 @@ export const Settings: React.FC<SettingsProps> = ({
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState<"accounts" | "categories" | "tags" | "account">("accounts");
+
+  // Ordem das contas (a mesma ordem aparece no Inicio)
+  const moveAccount = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= accounts.length) return;
+    const ids = accounts.map(a => a.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    try {
+      const res = await api.reorderAccounts(ids);
+      if (!res.success) {
+        toast.error("Não foi possível reordenar as contas.");
+        return;
+      }
+      await onRefresh();
+    } catch {
+      toast.error("Não foi possível reordenar as contas.");
+    }
+  };
 
   // Ajuste de saldo direto na lista de contas (no lugar do prompt do navegador)
   const [editingBalanceId, setEditingBalanceId] = useState<number | null>(null);
@@ -355,9 +373,27 @@ export const Settings: React.FC<SettingsProps> = ({
 
           {/* Lista de Contas */}
           <div className="space-y-2">
-            {accounts.map(acc => (
+            {accounts.map((acc, index) => (
               <div key={acc.id} className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-y-2">
                 <div className="flex items-center gap-3">
+                  <div className="flex flex-col -my-1">
+                    <button
+                      onClick={() => moveAccount(index, -1)}
+                      disabled={index === 0}
+                      aria-label={`Mover ${acc.name} para cima`}
+                      className="p-1 text-slate-400 hover:text-white disabled:opacity-25 disabled:hover:text-slate-400"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => moveAccount(index, 1)}
+                      disabled={index === accounts.length - 1}
+                      aria-label={`Mover ${acc.name} para baixo`}
+                      className="p-1 text-slate-400 hover:text-white disabled:opacity-25 disabled:hover:text-slate-400"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>
                     <CreditCard className="w-4 h-4" />
                   </div>

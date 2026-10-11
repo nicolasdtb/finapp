@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../../database/index.js";
 import { accounts } from "../../database/schema.js";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, asc, sql } from "drizzle-orm";
 
 export async function accountRoutes(app: FastifyInstance) {
   // Hook de autenticacao obrigatoria para todas as rotas de contas
@@ -17,7 +17,8 @@ export async function accountRoutes(app: FastifyInstance) {
   app.get("/", async (request, reply) => {
     const user = request.user as { id: number };
     const list = await db.select().from(accounts)
-      .where(and(isNull(accounts.deletedAt), eq(accounts.userId, user.id)));
+      .where(and(isNull(accounts.deletedAt), eq(accounts.userId, user.id)))
+      .orderBy(asc(accounts.sortOrder), asc(accounts.id));
     return reply.send(list);
   });
 
@@ -36,11 +37,30 @@ export async function accountRoutes(app: FastifyInstance) {
     });
 
     const data = schema.parse(request.body);
+    // Conta nova vai para o fim da lista
+    const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${accounts.sortOrder}), 0) + 1` })
+      .from(accounts)
+      .where(eq(accounts.userId, user.id));
     const [created] = await db.insert(accounts).values({
       ...data,
+      sortOrder: Number(next),
       userId: user.id
     }).returning();
     return reply.status(201).send(created);
+  });
+
+  // Reordenar contas: recebe os ids na ordem desejada
+  app.put("/order", async (request, reply) => {
+    const user = request.user as { id: number };
+    const { ids } = z.object({ ids: z.array(z.number().int()).min(1).max(100) }).parse(request.body);
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < ids.length; i++) {
+        await tx.update(accounts)
+          .set({ sortOrder: i + 1 })
+          .where(and(eq(accounts.id, ids[i]), eq(accounts.userId, user.id)));
+      }
+    });
+    return reply.send({ success: true });
   });
 
   app.put("/:id", async (request, reply) => {

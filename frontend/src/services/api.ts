@@ -170,6 +170,14 @@ export const api = {
     });
     return res.json();
   },
+  async reorderAccounts(ids: number[]): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_URL}/accounts/order`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ids }),
+    });
+    return res.json();
+  },
   async deleteAccount(id: number): Promise<{ success: boolean }> {
     const res = await fetch(`${API_URL}/accounts/${id}`, { method: "DELETE", headers: getAuthHeaders() });
     return res.json();
