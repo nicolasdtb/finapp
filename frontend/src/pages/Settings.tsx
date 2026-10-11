@@ -36,6 +36,15 @@ export const Settings: React.FC<SettingsProps> = ({
   const [newAccBalanceCents, setNewAccBalanceCents] = useState<number>(0);
   const [newAccColor, setNewAccColor] = useState("#3B82F6");
 
+  // Dados do cartao (limite, fechamento, vencimento) no cadastro e na edicao
+  const [newCardLimitCents, setNewCardLimitCents] = useState<number>(0);
+  const [newCardClosing, setNewCardClosing] = useState("");
+  const [newCardDue, setNewCardDue] = useState("");
+  const [editingCardId, setEditingCardId] = useState<number | null>(null);
+  const [cardLimitCents, setCardLimitCents] = useState<number>(0);
+  const [cardClosing, setCardClosing] = useState("");
+  const [cardDue, setCardDue] = useState("");
+
   // Nova Categoria
   const [newCatName, setNewCatName] = useState("");
   const [newCatType, setNewCatType] = useState<number>(2);
@@ -45,18 +54,59 @@ export const Settings: React.FC<SettingsProps> = ({
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#64748B");
 
+  const validDay = (n: number) => Number.isInteger(n) && n >= 1 && n <= 31;
+
+  const startCardEdit = (acc: Account) => {
+    setEditingCardId(acc.id);
+    setCardLimitCents(Math.round(parseFloat(acc.creditLimit || "0") * 100));
+    setCardClosing(acc.closingDay ? String(acc.closingDay) : "");
+    setCardDue(acc.dueDay ? String(acc.dueDay) : "");
+  };
+
+  const handleSaveCard = async (acc: Account) => {
+    const closing = parseInt(cardClosing, 10);
+    const due = parseInt(cardDue, 10);
+    if (!validDay(closing)) return toast.error("Informe o dia de fechamento (1 a 31).");
+    if (!validDay(due)) return toast.error("Informe o dia de vencimento (1 a 31).");
+    const res: any = await api.updateAccount(acc.id, {
+      creditLimit: centsToDecimalString(cardLimitCents),
+      closingDay: closing,
+      dueDay: due
+    });
+    if (res && res.id) {
+      toast.success("Cartão atualizado.");
+      setEditingCardId(null);
+      await onRefresh();
+    } else {
+      toast.error("Não foi possível salvar o cartão.");
+    }
+  };
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAccName) return;
+    const isCard = newAccType === 2;
+    const closing = parseInt(newCardClosing, 10);
+    const due = parseInt(newCardDue, 10);
+    if (isCard && !validDay(closing)) return toast.error("Informe o dia de fechamento (1 a 31).");
+    if (isCard && !validDay(due)) return toast.error("Informe o dia de vencimento (1 a 31).");
     await api.createAccount({
       name: newAccName,
       typeId: newAccType,
       balance: centsToDecimalString(newAccBalanceCents),
       color: newAccColor,
-      icon: newAccType === 2 ? "credit-card" : "wallet"
+      icon: isCard ? "credit-card" : "wallet",
+      ...(isCard ? {
+        creditLimit: centsToDecimalString(newCardLimitCents),
+        closingDay: closing,
+        dueDay: due
+      } : {})
     });
     setNewAccName("");
     setNewAccBalanceCents(0);
+    setNewCardLimitCents(0);
+    setNewCardClosing("");
+    setNewCardDue("");
     await onRefresh();
   };
 
@@ -227,6 +277,47 @@ export const Settings: React.FC<SettingsProps> = ({
                 />
               </div>
             </div>
+            {newAccType === 2 && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="relative col-span-3">
+                  <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Limite do cartão"
+                    value={formatCentsToBRL(newCardLimitCents)}
+                    onChange={(e) => setNewCardLimitCents(parseInputToCents(e.target.value))}
+                    aria-label="Limite do cartão"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 pl-8 pr-2.5 text-xs text-white"
+                  />
+                </div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={31}
+                  placeholder="Dia fecha"
+                  value={newCardClosing}
+                  onChange={(e) => setNewCardClosing(e.target.value)}
+                  aria-label="Dia de fechamento da fatura"
+                  className="col-span-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={31}
+                  placeholder="Dia vence"
+                  value={newCardDue}
+                  onChange={(e) => setNewCardDue(e.target.value)}
+                  aria-label="Dia de vencimento da fatura"
+                  className="col-span-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white"
+                />
+                <p className="col-span-3 text-[11px] text-slate-500">
+                  Compras feitas depois do dia de fechamento entram na fatura do mês seguinte.
+                </p>
+              </div>
+            )}
             <div className="flex justify-between items-center pt-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400">Cor:</span>
@@ -257,9 +348,25 @@ export const Settings: React.FC<SettingsProps> = ({
                   <div>
                     <h4 className="text-sm font-semibold text-white">{acc.name}</h4>
                     <p className="text-xs text-slate-400">R$ {parseFloat(acc.balance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                    {acc.typeId === 2 && (
+                      <p className={`text-[11px] ${acc.closingDay && acc.dueDay ? "text-slate-500" : "text-amber-400"}`}>
+                        {acc.closingDay && acc.dueDay
+                          ? `Fecha dia ${acc.closingDay} • Vence dia ${acc.dueDay} • Limite R$ ${parseFloat(acc.creditLimit || "0").toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                          : "Configure fechamento e vencimento"}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {acc.typeId === 2 && (
+                    <button
+                      onClick={() => startCardEdit(acc)}
+                      title="Configurar limite, fechamento e vencimento"
+                      className="px-2.5 py-1 text-xs font-semibold text-violet-300 hover:text-white bg-violet-500/10 hover:bg-violet-600 rounded-lg transition"
+                    >
+                      Configurar
+                    </button>
+                  )}
                   <button
                     onClick={() => startBalanceEdit(acc)}
                     title="Ajustar saldo da conta"
@@ -275,6 +382,59 @@ export const Settings: React.FC<SettingsProps> = ({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+
+                {editingCardId === acc.id && (
+                  <div className="w-full grid grid-cols-3 gap-2">
+                    <div className="relative col-span-3">
+                      <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">R$</span>
+                      <input
+                        inputMode="numeric"
+                        value={formatCentsToBRL(cardLimitCents)}
+                        onChange={(e) => setCardLimitCents(parseInputToCents(e.target.value))}
+                        aria-label={`Limite de ${acc.name}`}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg py-2 pl-8 pr-2.5 text-sm text-white outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={31}
+                      placeholder="Dia fecha"
+                      value={cardClosing}
+                      onChange={(e) => setCardClosing(e.target.value)}
+                      aria-label="Dia de fechamento"
+                      className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white outline-none focus:border-blue-500"
+                    />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={31}
+                      placeholder="Dia vence"
+                      value={cardDue}
+                      onChange={(e) => setCardDue(e.target.value)}
+                      aria-label="Dia de vencimento"
+                      className="bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-white outline-none focus:border-blue-500"
+                    />
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => handleSaveCard(acc)}
+                        title="Salvar cartão"
+                        className="p-2 text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 rounded-lg transition"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setEditingCardId(null)}
+                        title="Cancelar"
+                        className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {editingBalanceId === acc.id && (
                   <div className="w-full flex items-center gap-2">

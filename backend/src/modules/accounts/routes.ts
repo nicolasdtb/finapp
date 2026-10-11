@@ -29,9 +29,9 @@ export async function accountRoutes(app: FastifyInstance) {
       balance: z.string().default("0.00"),
       color: z.string().default("#3B82F6"),
       icon: z.string().default("wallet"),
-      creditLimit: z.string().optional(),
-      closingDay: z.number().optional(),
-      dueDay: z.number().optional(),
+      creditLimit: z.string().regex(/^\d+(\.\d{1,2})?$/, "Limite inválido").optional(),
+      closingDay: z.number().int().min(1).max(31).optional(),
+      dueDay: z.number().int().min(1).max(31).optional(),
     });
 
     const data = schema.parse(request.body);
@@ -51,9 +51,9 @@ export async function accountRoutes(app: FastifyInstance) {
       balance: z.string().optional(),
       color: z.string().optional(),
       icon: z.string().optional(),
-      creditLimit: z.string().optional(),
-      closingDay: z.number().optional(),
-      dueDay: z.number().optional(),
+      creditLimit: z.string().regex(/^\d+(\.\d{1,2})?$/, "Limite inválido").optional(),
+      closingDay: z.number().int().min(1).max(31).optional(),
+      dueDay: z.number().int().min(1).max(31).optional(),
     });
 
     const data = schema.parse(request.body);
